@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Interactive Family Absence Simulator</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 1.5rem; }
+    .row { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .card { border: 1px solid #ddd; border-radius: 12px; padding: 1rem; flex: 1; min-width: 320px; }
+    .controls label { display: block; margin-top: .5rem; font-weight: 600; }
+    .controls input[type=range] { width: 100%; }
+    .small { color: #555; font-size: 0.9rem; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem 1rem; align-items: center; }
+    .race-grid { display: grid; grid-template-columns: 1fr 110px; gap: .5rem 1rem; align-items: center; }
+    button { padding: .6rem 1rem; border-radius: 8px; border: 1px solid #ccc; background: #fafafa; cursor: pointer; }
+    button:hover { background: #f0f0f0; }
+  </style>
+</head>
+<body>
+  <h1>🏠 Interactive Family Absence Simulator</h1>
+  <p class="small">
+    Change policy improvements, beta coefficients, race/ethnicity mix, and Likert shifts (1–5).
+    Results update instantly in your browser. Host on GitHub Pages without a server.
+  </p>
+
+  <div class="row">
+    <div class="card controls" style="max-width: 560px;">
+      <h2>Policy Improvements (Δ Likert points)</h2>
+      <label>Loneliness: <span id="p_loneliness_val">0.00</span></label>
+      <input id="p_loneliness" type="range" min="0" max="1" step="0.01" value="0.00">
+      <label>Worry: <span id="p_worry_val">0.00</span></label>
+      <input id="p_worry" type="range" min="0" max="1" step="0.01" value="0.00">
+      <label>Overwhelm: <span id="p_overwhelm_val">0.00</span></label>
+      <input id="p_overwhelm" type="range" min="0" max="1" step="0.01" value="0.00">
+
+      <h2 style="margin-top:1rem;">Beta Coefficients (days saved / +1 point)</h2>
+      <div class="grid-2">
+        <div>Loneliness β</div><input id="b_loneliness" type="number" step="0.0001">
+        <div>Worry β</div><input id="b_worry" type="number" step="0.0001">
+        <div>Overwhelm β</div><input id="b_overwhelm" type="number" step="0.0001">
+      </div>
+
+      <h2 style="margin-top:1rem;">Distribution Shifts (applied before policy; clamp to 1–5)</h2>
+      <label>Loneliness shift: <span id="s_loneliness_val">0.00</span></label>
+      <input id="s_loneliness" type="range" min="-2" max="2" step="0.1" value="0">
+      <label>Worry shift: <span id="s_worry_val">0.00</span></label>
+      <input id="s_worry" type="range" min="-2" max="2" step="0.1" value="0">
+      <label>Overwhelm shift: <span id="s_overwhelm_val">0.00</span></label>
+      <input id="s_overwhelm" type="range" min="-2" max="2" step="0.1" value="0">
+
+      <h2 style="margin-top:1rem;">Sampling & Randomness</h2>
+      <div class="grid-2">
+        <div>Sample size (families)</div><input id="sample_n" type="number" min="10" step="10">
+        <div>Random seed</div><input id="seed" type="number" step="1" value="1234">
+      </div>
+
+      <h2 style="margin-top:1rem;">Race/Ethnicity Composition (%)</h2>
+      <div class="race-grid" id="race_inputs"></div>
+      <p class="small">Values auto-normalize to 100% when running.</p>
+
+      <h2 style="margin-top:1rem;">Mean Age Shift</h2>
+      <label>Age shift (years): <span id="age_shift_val">0</span></label>
+      <input id="age_shift" type="range" min="-10" max="10" step="1" value="0">
+      <p class="small" id="age_note"></p>
+
+      <div style="margin-top:1rem;">
+        <button id="btn_no_intervention">No Intervention</button>
+        <button id="btn_run">Run Simulation</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Average Absences</h2>
+      <div id="avg_chart" style="height: 360px;"></div>
+      <p class="small">Bars show average baseline vs simulated after-policy absences.</p>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:1rem;">
+    <div class="card">
+      <h2>Distribution: Baseline vs After</h2>
+      <div id="hist_chart" style="height: 420px;"></div>
+    </div>
+  </div>
+
+<script>
+  // ---------- Data injected from Python ----------
+  const FAMILIES = [{"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 3.0, "loneliness": 2.0, "worry": 5.0, "overwhelm": 5.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 2.0, "loneliness": 5.0, "worry": 3.0, "overwhelm": 2.0, "race": "White", "child_age": null}, {"baseline": 0.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0, "race": "Black/African American", "child_age": null}, {"baseline": 1.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0, "race": "Black/African American", "child_age": null}, {"baseline": 1.0, "loneliness": 1.0, "worry": 3.0, "overwhelm": 3.0, "race": "Prefer not/missing", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 0.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 1.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 4.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 3.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 2.0, "race": "White", "child_age": null}, {"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 1.0, "race": "Multiracial", "child_age": null}, {"baseline": 2.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 2.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "Multiracial", "child_age": null}, {"baseline": 3.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 4.0, "worry": 2.0, "overwhelm": 1.0, "race": "Black/African American", "child_age": null}, {"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 1.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 3.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 3.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 2.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 0.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 4.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 2.0, "race": "Asian", "child_age": null}, {"baseline": 4.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 2.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 4.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 1.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 3.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 2.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 1.0, "race": "Black/African American", "child_age": null}, {"baseline": 1.0, "loneliness": 4.0, "worry": 3.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 3.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 4.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 1.0, "race": "Multiracial", "child_age": null}, {"baseline": 1.0, "loneliness": 5.0, "worry": 1.0, "overwhelm": 2.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 2.0, "worry": 5.0, "overwhelm": 4.0, "race": "Multiracial", "child_age": null}, {"baseline": 4.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 3.0, "loneliness": 5.0, "worry": 1.0, "overwhelm": 2.0, "race": "Black/African American", "child_age": null}, {"baseline": 1.0, "loneliness": 1.0, "worry": 5.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 1.0, "loneliness": 5.0, "worry": 4.0, "overwhelm": 2.0, "race": "Black/African American", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 4.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 0.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 5.0, "race": "Black/African American", "child_age": null}, {"baseline": 2.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 4.0, "race": "Prefer not/missing", "child_age": null}, {"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 4.0, "worry": 2.0, "overwhelm": 2.0, "race": "Multiracial", "child_age": null}, {"baseline": 3.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 5.0, "race": "White", "child_age": null}, {"baseline": 0.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 3.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 0.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0, "race": "Prefer not/missing", "child_age": null}, {"baseline": 4.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 4.0, "worry": 2.0, "overwhelm": 2.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 3.0, "race": "Black/African American", "child_age": null}, {"baseline": 2.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 4.0, "loneliness": 4.0, "worry": 2.0, "overwhelm": 1.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0, "race": "Black/African American", "child_age": null}, {"baseline": 4.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 5.0, "worry": 1.0, "overwhelm": 1.0, "race": "Black/African American", "child_age": null}, {"baseline": 1.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0, "race": "Prefer not/missing", "child_age": null}, {"baseline": 1.0, "loneliness": 5.0, "worry": 1.0, "overwhelm": 1.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 3.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 2.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 3.0, "race": "Multiracial", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 4.0, "loneliness": 5.0, "worry": 2.0, "overwhelm": 1.0, "race": "American Indian/Alaska Native", "child_age": null}, {"baseline": 3.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 4.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 4.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 2.0, "worry": 5.0, "overwhelm": 5.0, "race": "Black/African American", "child_age": null}, {"baseline": 2.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "Some other race", "child_age": null}, {"baseline": 2.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "Prefer not/missing", "child_age": null}, {"baseline": 2.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0, "race": "American Indian/Alaska Native", "child_age": null}, {"baseline": 2.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 2.0, "race": "Black/African American", "child_age": null}, {"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "Prefer not/missing", "child_age": null}, {"baseline": 4.0, "loneliness": 5.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0, "race": "Prefer not/missing", "child_age": null}, {"baseline": 0.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 4.0, "race": "Black/African American", "child_age": null}, {"baseline": 4.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 1.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 0.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 2.0, "worry": 5.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 3.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "Multiracial", "child_age": null}, {"baseline": 3.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 1.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 0.0, "loneliness": 2.0, "worry": 5.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 4.0, "worry": 2.0, "overwhelm": 1.0, "race": "Multiracial", "child_age": null}, {"baseline": 4.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 2.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0, "race": "Multiracial", "child_age": null}, {"baseline": 2.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 1.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 0.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 1.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 3.0, "loneliness": 4.0, "worry": 3.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 3.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 2.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 1.0, "worry": 5.0, "overwhelm": 5.0, "race": "White", "child_age": null}, {"baseline": 4.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 3.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 2.0, "race": "White", "child_age": null}, {"baseline": 4.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 4.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 2.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 4.0, "race": "Multiracial", "child_age": null}, {"baseline": 4.0, "loneliness": 4.0, "worry": 2.0, "overwhelm": 2.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 1.0, "race": "Black/African American", "child_age": null}, {"baseline": 4.0, "loneliness": 5.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 4.0, "loneliness": 5.0, "worry": 1.0, "overwhelm": 1.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 3.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 2.0, "race": "Black/African American", "child_age": null}, {"baseline": 3.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 1.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 3.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 4.0, "race": "Black/African American", "child_age": null}, {"baseline": 1.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0, "race": "Black/African American", "child_age": null}, {"baseline": 2.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 3.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 3.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 5.0, "race": "White", "child_age": null}, {"baseline": 4.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 3.0, "loneliness": 4.0, "worry": 3.0, "overwhelm": 3.0, "race": "Black/African American", "child_age": null}, {"baseline": 4.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 4.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 5.0, "worry": 4.0, "overwhelm": 2.0, "race": "Multiracial", "child_age": null}, {"baseline": 2.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 5.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 1.0, "race": "Black/African American", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 4.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 3.0, "loneliness": 5.0, "worry": 1.0, "overwhelm": 2.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 0.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 2.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 0.0, "loneliness": 5.0, "worry": 1.0, "overwhelm": 1.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 4.0, "loneliness": 4.0, "worry": 2.0, "overwhelm": 2.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 1.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 2.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 4.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 1.0, "race": "Prefer not/missing", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 4.0, "race": "Black/African American", "child_age": null}, {"baseline": 4.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 1.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 4.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 3.0, "loneliness": 5.0, "worry": 1.0, "overwhelm": 1.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 0.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 3.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 3.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 2.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 0.0, "loneliness": 4.0, "worry": 2.0, "overwhelm": 1.0, "race": "Multiracial", "child_age": null}, {"baseline": 4.0, "loneliness": 5.0, "worry": 1.0, "overwhelm": 3.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 3.0, "loneliness": 5.0, "worry": 1.0, "overwhelm": 1.0, "race": "Prefer not/missing", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 4.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 1.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 5.0, "worry": 1.0, "overwhelm": 1.0, "race": "Prefer not/missing", "child_age": null}, {"baseline": 1.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 5.0, "worry": 4.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 0.0, "loneliness": 4.0, "worry": 3.0, "overwhelm": 3.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 3.0, "loneliness": 5.0, "worry": 2.0, "overwhelm": 4.0, "race": "Prefer not/missing", "child_age": null}, {"baseline": 2.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 2.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 0.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 3.0, "race": "Black/African American", "child_age": null}, {"baseline": 4.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 0.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0, "race": "White", "child_age": null}, {"baseline": 0.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 4.0, "loneliness": 5.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 4.0, "loneliness": 4.0, "worry": 3.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 5.0, "race": "White", "child_age": null}, {"baseline": 3.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0, "race": "Prefer not/missing", "child_age": null}, {"baseline": 2.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 2.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 3.0, "loneliness": 4.0, "worry": 3.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 0.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 3.0, "race": "Black/African American", "child_age": null}, {"baseline": 4.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 4.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 4.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 1.0, "worry": 3.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 2.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 0.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 4.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 1.0, "race": "Black/African American", "child_age": null}, {"baseline": 3.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 4.0, "race": "Prefer not/missing", "child_age": null}, {"baseline": 2.0, "loneliness": 5.0, "worry": 3.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 0.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 5.0, "race": "White", "child_age": null}, {"baseline": 4.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 1.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 1.0, "loneliness": 5.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 3.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 0.0, "loneliness": 1.0, "worry": 3.0, "overwhelm": 3.0, "race": "Prefer not/missing", "child_age": null}, {"baseline": 1.0, "loneliness": 4.0, "worry": 2.0, "overwhelm": 3.0, "race": "White", "child_age": null}, {"baseline": 0.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 3.0, "loneliness": 5.0, "worry": 4.0, "overwhelm": 3.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 4.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 4.0, "race": "Hispanic/Latino", "child_age": null}, {"baseline": 1.0, "loneliness": 5.0, "worry": 4.0, "overwhelm": 1.0, "race": "White", "child_age": null}, {"baseline": 1.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 3.0, "race": "White", "child_age": null}];
+  const BETAS_INIT = {"overwhelm": 0.0379915, "worry": 0.1098821, "loneliness": 0.453555};
+  const RACES = ["American Indian/Alaska Native", "Asian", "Black/African American", "Hispanic/Latino", "Multiracial", "Prefer not/missing", "Some other race", "White"];
+  const RACE_SHARES_INIT = {"American Indian/Alaska Native": 0.009433962264150943, "Asian": 0.0047169811320754715, "Black/African American": 0.10849056603773585, "Hispanic/Latino": 0.20754716981132076, "Multiracial": 0.05660377358490566, "Prefer not/missing": 0.0660377358490566, "Some other race": 0.0047169811320754715, "White": 0.5424528301886793};
+  const HAS_AGE = false;
+
+  // ---------- Utilities ----------
+  function clampLikert(x){ return Math.max(1, Math.min(5, x)); }
+
+  function mulberry32(a) {
+    return function() {
+      var t = a += 0x6D2B79F5;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    }
+  }
+
+  function poisson(lambda, rng) {
+    if (lambda <= 0) return 0;
+    const L = Math.exp(-lambda);
+    let k = 0, p = 1.0;
+    do { k++; p *= rng(); } while (p > L);
+    return k - 1;
+  }
+
+  function resampleFamilies(N, raceWeights, rng) {
+    const buckets = {};
+    for (const r of RACES) buckets[r] = [];
+    for (const f of FAMILIES) {
+      if (!buckets[f.race]) buckets[f.race] = [];
+      buckets[f.race].push(f);
+    }
+    const races = RACES.slice();
+    const w = races.map(r => Math.max(0, raceWeights[r] || 0));
+    const sumw = w.reduce((a,b)=>a+b,0) || 1;
+    const cw = [];
+    let acc = 0;
+    for (let i=0;i<w.length;i++){ acc += w[i]/sumw; cw.push(acc); }
+
+    const pickRace = () => {
+      const u = Math.random();
+      for (let i=0;i<cw.length;i++){ if (u <= cw[i]) return races[i]; }
+      return races[races.length-1];
+    };
+
+    const out = [];
+    for (let i=0;i<N;i++){
+      const r = pickRace();
+      const pool = buckets[r].length ? buckets[r] : FAMILIES;
+      const idx = Math.floor(Math.random()*pool.length);
+      out.push(Object.assign({}, pool[idx]));
+    }
+    return out;
+  }
+
+  function getSettings(noIntervention=false){
+    const policy = {
+      loneliness: noIntervention ? 0 : parseFloat(document.getElementById('p_loneliness').value),
+      worry:      noIntervention ? 0 : parseFloat(document.getElementById('p_worry').value),
+      overwhelm:  noIntervention ? 0 : parseFloat(document.getElementById('p_overwhelm').value),
+    };
+    const betas = {
+      loneliness: parseFloat(document.getElementById('b_loneliness').value),
+      worry:      parseFloat(document.getElementById('b_worry').value),
+      overwhelm:  parseFloat(document.getElementById('b_overwhelm').value),
+    };
+    const shifts = {
+      loneliness: parseFloat(document.getElementById('s_loneliness').value),
+      worry:      parseFloat(document.getElementById('s_worry').value),
+      overwhelm:  parseFloat(document.getElementById('s_overwhelm').value),
+      age:        HAS_AGE ? parseFloat(document.getElementById('age_shift').value) : 0,
+    };
+    const raw = {};
+    let sum = 0;
+    for (const r of RACES){
+      const v = parseFloat(document.getElementById('rw_'+r).value) || 0;
+      raw[r] = Math.max(0, v);
+      sum += raw[r];
+    }
+    const weights = {};
+    if (sum === 0){
+      for (const r of RACES) weights[r] = 1 / RACES.length;
+    } else {
+      for (const r of RACES) weights[r] = raw[r] / sum;
+    }
+    const N = Math.max(10, parseInt(document.getElementById('sample_n').value || "10", 10));
+    const seed = parseInt(document.getElementById('seed').value || "1234", 10);
+    return {policy, betas, shifts, weights, N, seed};
+  }
+
+  function simulateOnce(policy, betas, shifts, weights, N, seed){
+    // Deterministic RNG for Poisson draws
+    const rng = mulberry32((seed >>> 0) || 1234);
+
+    // Re-sample a population with desired race mix
+    const sample = resampleFamilies(N, weights, rng);
+    const baseline = [];
+    const after = [];
+
+    for (const f of sample){
+      // Apply Likert shifts (clamped to 1–5). Age is not used in outcome unless you extend model.
+      const lon = clampLikert(f.loneliness + shifts.loneliness);
+      const wor = clampLikert(f.worry      + shifts.worry);
+      const ove = clampLikert(f.overwhelm  + shifts.overwhelm);
+      const age = HAS_AGE && f.child_age != null ? (f.child_age + shifts.age) : null;
+
+      // Days saved from policy (betas are "days saved per +1 Likert point").
+      const saved = (betas.loneliness * policy.loneliness) +
+                    (betas.worry      * policy.worry) +
+                    (betas.overwhelm  * policy.overwhelm);
+
+      const lam = Math.max(0, f.baseline - saved);
+
+      // Poisson draw using deterministic RNG: transform rng() to use Knuth method.
+      // We'll temporarily override Math.random within poisson for determinism.
+      const _rand = Math.random;
+      Math.random = rng;
+      const aft = poisson(lam, rng);
+      Math.random = _rand;
+
+      baseline.push(f.baseline);
+      after.push(aft);
+    }
+
+    const mean = arr => arr.reduce((a,b)=>a+b,0) / (arr.length || 1);
+    return {
+      baselineAvg: mean(baseline),
+      afterAvg:    mean(after),
+      baselineArr: baseline,
+      afterArr:    after
+    };
+  }
+
+  function render(r){
+    const avgTrace = [{
+      x: ['Baseline','After'],
+      y: [r.baselineAvg, r.afterAvg],
+      type: 'bar',
+      text: [r.baselineAvg.toFixed(2), r.afterAvg.toFixed(2)],
+      textposition: 'auto'
+    }];
+    const avgLayout = {
+      margin: {t: 30, r: 10, b: 60, l: 60},
+      yaxis: { title: 'Absence Days' },
+      xaxis: { title: 'Time (Baseline vs After)' }
+    };
+    Plotly.react('avg_chart', avgTrace, avgLayout, {displayModeBar: false});
+
+    const histData = [
+      { x: r.baselineArr, type: 'histogram', opacity: 0.6, name: 'Baseline' },
+      { x: r.afterArr,    type: 'histogram', opacity: 0.6, name: 'After' }
+    ];
+    const histLayout = {
+      barmode: 'overlay',
+      margin: {t: 30, r: 10, b: 60, l: 60},
+      xaxis: { title: 'Absence Days' },
+      yaxis: { title: 'Families (count)' },
+      legend: {orientation: 'h'}
+    };
+    Plotly.react('hist_chart', histData, histLayout, {displayModeBar: false});
+  }
+
+  function run(noIntervention=false){
+    const s = getSettings(noIntervention);
+    const r = simulateOnce(s.policy, s.betas, s.shifts, s.weights, s.N, s.seed);
+    render(r);
+  }
+
+  // ---------- Initialize UI ----------
+  function init(){
+    const note = document.getElementById('age_note');
+    if (!HAS_AGE) {
+      document.getElementById('age_shift').disabled = true;
+      note.textContent = 'Age controls are disabled because no child_age column was found in data.csv.';
+    } else {
+      note.textContent = 'Shift applied additively to existing ages (not used in outcome unless model extended).';
+    }
+
+    function bindRangeLabel(id, lab){
+      const el = document.getElementById(id);
+      const labEl = document.getElementById(lab);
+      const upd = ()=> labEl.textContent = parseFloat(el.value).toFixed(2);
+      el.addEventListener('input', function(){ upd(); run(false); });
+      upd();
+    }
+    bindRangeLabel('p_loneliness','p_loneliness_val');
+    bindRangeLabel('p_worry','p_worry_val');
+    bindRangeLabel('p_overwhelm','p_overwhelm_val');
+    bindRangeLabel('s_loneliness','s_loneliness_val');
+    bindRangeLabel('s_worry','s_worry_val');
+    bindRangeLabel('s_overwhelm','s_overwhelm_val');
+
+    const ageEl = document.getElementById('age_shift');
+    const ageLab = document.getElementById('age_shift_val');
+    if (ageEl) {
+      const updAge = function(){ ageLab.textContent = parseInt(ageEl.value || '0',10); };
+      ageEl.addEventListener('input', function(){ updAge(); run(false); });
+      updAge();
+    }
+
+    // default sample size = dataset size
+    document.getElementById('sample_n').value = FAMILIES.length;
+
+    // initialize betas
+    document.getElementById('b_loneliness').value = BETAS_INIT.loneliness;
+    document.getElementById('b_worry').value      = BETAS_INIT.worry;
+    document.getElementById('b_overwhelm').value  = BETAS_INIT.overwhelm;
+
+    // race inputs
+    const c = document.getElementById('race_inputs');
+    for (const r of RACES){
+      const lab = document.createElement('div');
+      lab.textContent = r;
+      const inp = document.createElement('input');
+      inp.type = 'number'; inp.step='1'; inp.min='0'; inp.max='100';
+      inp.id = 'rw_'+r; inp.value = Math.round((RACE_SHARES_INIT[r]||0)*100);
+      inp.addEventListener('change', function(){ run(false); });
+      inp.addEventListener('input',  function(){ run(false); });
+      c.appendChild(lab); c.appendChild(inp);
+    }
+
+    // numeric inputs that should re-run on change
+    function addRunOnChange(id){
+      const el = document.getElementById(id);
+      el.addEventListener('change', function(){ run(false); });
+      el.addEventListener('input',  function(){ run(false); });
+    }
+    ['b_loneliness','b_worry','b_overwhelm','sample_n','seed'].forEach(addRunOnChange);
+
+    document.getElementById('btn_run').addEventListener('click', function(){ run(false); });
+    document.getElementById('btn_no_intervention').addEventListener('click', function(){ run(true); });
+
+    run(false);
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
