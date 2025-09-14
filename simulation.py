@@ -215,17 +215,20 @@ def build_anim_df(
     return pd.DataFrame(recs)
 
 # ────────────────────────────────────────────────────────────────────────────
-# 4) INTERACTIVE SIMULATOR (client-side HTML+JS) — race mix + scenario select
+# 4) INTERACTIVE SIMULATOR (pure client-side HTML+JS) — race mix + scenarios
 # ────────────────────────────────────────────────────────────────────────────
+
+import json, os  # keep here so this block is self-contained
+
 def write_interactive_simulator(families: list[dict], betas: dict, out_path: str) -> None:
     """
-    Generates a minimal simulator where the *only* user-controlled levers are:
-      - Race/Ethnicity composition (%)
-      - Intervention scenario (No Intervention, Ads Simple, CBT, Animal Therapy)
-      - Sample size & seed
-
-    'After' is computed as Poisson(max(0, baseline - sum(beta_m * Δ_m))).
-    We keep everything self-contained so locals are in scope for replacements.
+    Minimal interactive simulator:
+      - Controls: Scenario (intervention), race/ethnicity mix (%), sample size, seed
+      - 'After' is simulated using BETAS and the chosen scenario:
+            saved_days = Σ_m betas[m] * policy[m]
+            lambda_after = max(0, baseline - saved_days)
+            after_days ~ Poisson(lambda_after)
+      - Deterministic given (scenario, race mix, sample size, seed).
     """
     # --- Race shares from current dataset ---
     races = sorted({f['race'] for f in families})
@@ -235,18 +238,16 @@ def write_interactive_simulator(families: list[dict], betas: dict, out_path: str
     total = sum(counts.values()) or 1
     shares = {r: counts[r] / total for r in races}
 
-    # --- Trimmed payload (baseline + covariates used by model; no age here) ---
-    families_min = []
-    for f in families:
-        families_min.append({
-            "baseline":   float(f["baseline"]),
-            "loneliness": float(f["loneliness"]),
-            "worry":      float(f["worry"]),
-            "overwhelm":  float(f["overwhelm"]),
-            "race":       f["race"],
-        })
+    # --- Trim payload for client (only what we actually use in JS) ---
+    families_min = [{
+        "baseline":   float(f["baseline"]),
+        "loneliness": float(f["loneliness"]),
+        "worry":      float(f["worry"]),
+        "overwhelm":  float(f["overwhelm"]),
+        "race":       f["race"],
+    } for f in families]
 
-    # --- Scenarios (policy deltas in Likert points). Add "No Intervention". ---
+    # --- Scenario deltas (Likert points) ---
     scenarios = {
         "No Intervention": {"loneliness": 0.0,  "worry": 0.0, "overwhelm": 0.0},
         "Ads Simple":      {"loneliness": 0.00, "worry": 0.0, "overwhelm": 0.0},
@@ -254,12 +255,12 @@ def write_interactive_simulator(families: list[dict], betas: dict, out_path: str
         "Animal Therapy":  {"loneliness": 0.80, "worry": 0.0, "overwhelm": 0.0},
     }
 
-    # --- Minimal HTML template ---
+    # --- HTML template (kept compact & clear) ---
     html = r"""<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Family Absence: Race Mix + Interventions</title>
+  <title>Family Absence Simulator</title>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 1.25rem; }
@@ -312,41 +313,49 @@ def write_interactive_simulator(families: list[dict], betas: dict, out_path: str
   </div>
 
 <script>
-  // ----- Data injected from Python -----
-  const FAMILIES = %%FAMILIES_JSON%%;      // list of {baseline, loneliness, worry, overwhelm, race}
-  const RACES = %%RACES_JSON%%;            // list of race labels
-  const RACE_SHARES_INIT = %%RACE_SHARES_JSON%%; // {race: share}
-  const BETAS = %%BETAS_JSON%%;            // {loneliness, worry, overwhelm}
-  const SCENARIOS = %%SCENARIOS_JSON%%;    // name -> {loneliness, worry, overwhelm}
+  // ---------- Injected from Python ----------
+  const FAMILIES   = %%FAMILIES_JSON%%;
+  const RACES      = %%RACES_JSON%%;
+  const INIT_SHARE = %%RACE_SHARES_JSON%%;
+  const BETAS      = %%BETAS_JSON%%;
+  const SCENARIOS  = %%SCENARIOS_JSON%%;
 
-  // ----- RNG + Poisson -----
+  // ---------- Minimal RNG + Poisson ----------
   function mulberry32(a){return function(){var t=a+=0x6D2B79F5;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;}}
-  function poisson(lam,rng){if(lam<=0)return 0;const L=Math.exp(-lam);let k=0,p=1;do{k++;p*=rng();}while(p>L);return k-1;}
+  function poisson(lam,rng){ if(lam<=0) return 0; const L=Math.exp(-lam); let k=0,p=1; do{ k++; p*=rng(); }while(p>L); return k-1; }
 
-  // ----- Resample families by race weights (bootstrap within race) -----
-  function resampleFamilies(N,weights,rng){
-    const buckets={}; for(const r of RACES) buckets[r]=[];
+  // ---------- Seeded resampling by race (uses rng() everywhere) ----------
+  function resampleFamilies(N, weights, rng){
+    const buckets = {}; for(const r of RACES) buckets[r]=[];
     for(const f of FAMILIES){ if(!buckets[f.race]) buckets[f.race]=[]; buckets[f.race].push(f); }
-    const races=RACES.slice();
-    const w=races.map(r=>Math.max(0,weights[r]||0));
-    const sumw=w.reduce((a,b)=>a+b,0)||1;
-    const cw=[]; let acc=0;
-    for(let i=0;i<w.length;i++){ acc+=w[i]/sumw; cw.push(acc); }
-    const pickRace=()=>{ const u=Math.random(); for(let i=0;i<cw.length;i++){ if(u<=cw[i]) return races[i]; } return races[races.length-1]; };
-    const out=[];
+
+    const races = RACES.slice();
+    const w = races.map(r => Math.max(0, weights[r] || 0));
+    const sumw = w.reduce((a,b)=>a+b,0) || 1;
+
+    const cw = []; let acc = 0;
+    for(let i=0;i<w.length;i++){ acc += w[i]/sumw; cw.push(acc); }
+
+    const pickRace = () => {
+      const u = rng();                                 // seeded
+      for(let i=0;i<cw.length;i++){ if(u <= cw[i]) return races[i]; }
+      return races[races.length-1];
+    };
+
+    const out = [];
     for(let i=0;i<N;i++){
-      const r=pickRace();
-      const pool=buckets[r].length?buckets[r]:FAMILIES;
-      const idx=Math.floor(Math.random()*pool.length);
+      const r = pickRace();
+      const pool = buckets[r].length ? buckets[r] : FAMILIES;
+      const idx  = Math.floor(rng() * pool.length);    // seeded
       out.push(Object.assign({}, pool[idx]));
     }
     return out;
   }
 
-  // ----- Read UI -----
+  // ---------- Read controls ----------
   function getSettings(){
     const scenName = document.getElementById('scenario').value;
-    const policy   = SCENARIOS[scenName]; // {loneliness, worry, overwhelm}
+    const policy   = SCENARIOS[scenName];
 
     const raw = {}; let sum = 0;
     for(const r of RACES){
@@ -362,39 +371,46 @@ def write_interactive_simulator(families: list[dict], betas: dict, out_path: str
     return {policy, weights, N, seed, scenName};
   }
 
-  // ----- Core simulation: apply policy via betas -----
+  // ---------- Core simulation ----------
   function simulateOnce(policy, weights, N, seed){
-    const rng = mulberry32((seed>>>0)||1234);
+    const rng = mulberry32((seed>>>0) || 1234);
     const sample = resampleFamilies(N, weights, rng);
     const baseline=[], after=[];
     for(const f of sample){
       const saved =
-        BETAS.loneliness * (policy.loneliness||0) +
-        BETAS.worry      * (policy.worry||0) +
-        BETAS.overwhelm  * (policy.overwhelm||0);
+        (BETAS.loneliness||0)*(policy.loneliness||0) +
+        (BETAS.worry||0)*(policy.worry||0) +
+        (BETAS.overwhelm||0)*(policy.overwhelm||0);
       const lam = Math.max(0, Number(f.baseline) - saved);
       baseline.push(Number(f.baseline));
-      after.push(poisson(lam, rng));
+      after.push(poisson(lam, rng));  // seeded
     }
-    const mean=a=>a.reduce((x,y)=>x+y,0)/(a.length||1);
-    return { baselineAvg: mean(baseline), afterAvg: mean(after), baselineArr: baseline, afterArr: after };
+    const mean = a => a.reduce((x,y)=>x+y,0) / (a.length || 1);
+    return { baselineAvg:mean(baseline), afterAvg:mean(after), baselineArr:baseline, afterArr:after };
   }
 
-  // ----- Charts -----
+  // ---------- Plots ----------
   function render(r, scenName){
-    Plotly.react('avg_chart',[
-      {x:['Baseline','After ('+scenName+')'], y:[r.baselineAvg, r.afterAvg], type:'bar',
-       text:[r.baselineAvg.toFixed(2), r.afterAvg.toFixed(2)], textposition:'auto'}],
-      {yaxis:{title:'Absence Days'}},{displayModeBar:false});
+    Plotly.react('avg_chart', [{
+      x:['Baseline','After ('+scenName+')'],
+      y:[r.baselineAvg, r.afterAvg],
+      type:'bar',
+      text:[r.baselineAvg.toFixed(2), r.afterAvg.toFixed(2)],
+      textposition:'auto'
+    }], { yaxis:{title:'Absence Days'} }, {displayModeBar:false});
 
-    Plotly.react('hist_chart',[
-      {x:r.baselineArr, type:'histogram', opacity:.6, name:'Baseline'},
-      {x:r.afterArr,    type:'histogram', opacity:.6, name:'After ('+scenName+')'}],
-      {barmode:'overlay', xaxis:{title:'Absence Days'}, yaxis:{title:'Families'}, legend:{orientation:'h'}},
-      {displayModeBar:false});
+    Plotly.react('hist_chart', [
+      { x:r.baselineArr, type:'histogram', opacity:.6, name:'Baseline' },
+      { x:r.afterArr,    type:'histogram', opacity:.6, name:'After ('+scenName+')' }
+    ], {
+      barmode:'overlay',
+      xaxis:{ title:'Absence Days' },
+      yaxis:{ title:'Families' },
+      legend:{ orientation:'h' }
+    }, {displayModeBar:false});
   }
 
-  // ----- Run & Init -----
+  // ---------- Wire-up ----------
   function run(){
     const s = getSettings();
     const r = simulateOnce(s.policy, s.weights, s.N, s.seed);
@@ -402,21 +418,24 @@ def write_interactive_simulator(families: list[dict], betas: dict, out_path: str
   }
 
   function init(){
-    // Scenario dropdown
+    // scenarios
     const sel = document.getElementById('scenario');
-    for(const name of Object.keys(SCENARIOS)){ const o=document.createElement('option'); o.value=name; o.textContent=name; sel.appendChild(o); }
+    for(const name of Object.keys(SCENARIOS)){
+      const o = document.createElement('option'); o.value=name; o.textContent=name; sel.appendChild(o);
+    }
 
-    // Race inputs
-    const c=document.getElementById('race_inputs');
+    // race inputs
+    const c = document.getElementById('race_inputs');
     for(const r of RACES){
-      const lab=document.createElement('div'); lab.textContent=r;
-      const inp=document.createElement('input'); inp.type='number'; inp.min='0'; inp.step='1';
-      inp.id='rw_'+r; inp.value=Math.round((RACE_SHARES_INIT[r]||0)*100);
+      const lab = document.createElement('div'); lab.textContent = r;
+      const inp = document.createElement('input'); inp.type='number'; inp.min='0'; inp.step='1';
+      inp.id = 'rw_'+r; inp.value = Math.round((INIT_SHARE[r]||0)*100);
       c.appendChild(lab); c.appendChild(inp);
     }
+
     document.getElementById('sample_n').value = FAMILIES.length;
     document.getElementById('btn_run').addEventListener('click', run);
-    run();
+    run(); // initial render
   }
 
   document.addEventListener('DOMContentLoaded', init);
@@ -425,17 +444,18 @@ def write_interactive_simulator(families: list[dict], betas: dict, out_path: str
 </html>
 """
 
-    # --- Inject JSON payloads into the template ---
-    html = html.replace("%%FAMILIES_JSON%%",     json.dumps(families_min))
-    html = html.replace("%%RACES_JSON%%",        json.dumps(races))
-    html = html.replace("%%RACE_SHARES_JSON%%",  json.dumps(shares))
-    html = html.replace("%%BETAS_JSON%%",        json.dumps(betas))
-    html = html.replace("%%SCENARIOS_JSON%%",    json.dumps(scenarios))
+    # --- Inject data into placeholders ---
+    html = html.replace("%%FAMILIES_JSON%%",    json.dumps(families_min))
+    html = html.replace("%%RACES_JSON%%",       json.dumps(races))
+    html = html.replace("%%RACE_SHARES_JSON%%", json.dumps(shares))
+    html = html.replace("%%BETAS_JSON%%",       json.dumps(betas))
+    html = html.replace("%%SCENARIOS_JSON%%",   json.dumps(scenarios))
 
-    # --- Write out ---
+    # --- Write file ---
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html)
+
 # ────────────────────────────────────────────────────────────────────────────
 # 5. MAIN (KEEPING YOUR REQUIRED BLOCK VERBATIM)
 # ────────────────────────────────────────────────────────────────────────────
