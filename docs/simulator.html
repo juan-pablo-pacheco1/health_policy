@@ -12,29 +12,47 @@
     select,input{padding:.35rem;border:1px solid #ccc;border-radius:6px;}
     button{padding:.5rem 1rem;border:1px solid #ccc;border-radius:8px;background:#fafafa;cursor:pointer;}
     button:hover{background:#f0f0f0;}
+    h1{margin:.2rem 0 1rem;}
   </style>
 </head>
 <body>
   <h1>🏠 Family Absence Simulator</h1>
+  <p style="max-width:720px;color:#444;">
+    Choose an intervention and simulate its effect on absence days. Results show averages with error bars (uncertainty)
+    and the full distribution of simulated absence days. This helps policymakers see both expected impacts and variability.
+  </p>
+
   <div class="row">
     <div class="card" style="max-width:420px;">
       <h2>Settings</h2>
       <div class="grid">
         <div>Scenario</div>
         <select id="scenario"></select>
+
         <div>Sample size</div>
         <input id="sample_n" type="number" min="10" step="10">
+
         <div>Seed</div>
         <input id="seed" type="number" step="1" value="1234">
+
         <div>Trials</div>
-        <input id="trials" type="number" step="10" value="100">
+        <input id="trials" type="number" min="1" step="1" value="30">
       </div>
-      <button id="btn_run" style="margin-top:.75rem;">Run Simulation</button>
+      <div style="margin-top:.75rem;">
+        <button id="btn_run">Run Simulation</button>
+      </div>
     </div>
+
     <div class="card">
-      <h2>Average Absences</h2>
+      <h2>Average Absences (± error)</h2>
       <div id="avg_chart" style="height:300px;"></div>
-      <p id="summary" style="color:#555;font-size:.9rem;"></p>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:1rem;">
+    <div class="card">
+      <h2>Distribution: Baseline vs After</h2>
+      <div id="hist_chart" style="height:320px;"></div>
     </div>
   </div>
 
@@ -46,61 +64,69 @@
   function mulberry32(a){return function(){var t=a+=0x6D2B79F5;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;}}
   function poisson(lam,rng){ if(lam<=0) return 0; const L=Math.exp(-lam); let k=0,p=1; do{ k++; p*=rng(); }while(p>L); return k-1; }
 
-  function sampleFamilies(N,rng){
-    const out=[];for(let i=0;i<N;i++){const idx=Math.floor(rng()*FAMILIES.length);out.push(FAMILIES[idx]);}
+  function sampleFamilies(N, rng){
+    const out=[]; for(let i=0;i<N;i++){ const idx=Math.floor(rng()*FAMILIES.length); out.push(FAMILIES[idx]); }
     return out;
   }
 
   function getSettings(){
+    const scenName=document.getElementById('scenario').value;
+    const N=Math.max(10, parseInt(document.getElementById('sample_n').value||"10",10));
+    const seed=parseInt(document.getElementById('seed').value||"1234",10);
+    const trials=Math.max(1, parseInt(document.getElementById('trials').value||"30",10));
+    return { scenName, policy:SCENARIOS[scenName], N, seed, trials };
+  }
+
+  function simulate(policy, N, seed, trials){
+    const baselineAvgs=[], afterAvgs=[], baselineAll=[], afterAll=[];
+    for(let t=0;t<trials;t++){
+      const rng=mulberry32(seed+t);
+      const sample=sampleFamilies(N,rng);
+      const saved=(BETAS.loneliness||0)*(policy.loneliness||0)+(BETAS.worry||0)*(policy.worry||0)+(BETAS.overwhelm||0)*(policy.overwhelm||0);
+      const baseline=[], after=[];
+      for(const f of sample){
+        const base=Number(f.baseline);
+        const lam=Math.max(0, base - saved);
+        baseline.push(base); after.push(poisson(lam,rng));
+      }
+      baselineAvgs.push(baseline.reduce((a,b)=>a+b,0)/baseline.length);
+      afterAvgs.push(after.reduce((a,b)=>a+b,0)/after.length);
+      baselineAll.push(...baseline); afterAll.push(...after);
+    }
+    function mean(a){return a.reduce((x,y)=>x+y,0)/a.length;}
+    function std(a){const m=mean(a); return Math.sqrt(a.reduce((s,v)=>s+(v-m)**2,0)/a.length);}
     return {
-      scenName: document.getElementById('scenario').value,
-      policy: SCENARIOS[document.getElementById('scenario').value],
-      N: Math.max(10, parseInt(document.getElementById('sample_n').value||"10",10)),
-      seed: parseInt(document.getElementById('seed').value||"1234",10),
-      trials: Math.max(1, parseInt(document.getElementById('trials').value||"100",10))
+      baselineAvg:mean(baselineAvgs), afterAvg:mean(afterAvgs),
+      baselineErr:std(baselineAvgs), afterErr:std(afterAvgs),
+      baselineArr:baselineAll, afterArr:afterAll
     };
   }
 
-  function simulateOnce(policy,N,rng){
-    const sample=sampleFamilies(N,rng);
-    const saved=(BETAS.loneliness||0)*(policy.loneliness||0)+(BETAS.worry||0)*(policy.worry||0)+(BETAS.overwhelm||0)*(policy.overwhelm||0);
-    const baseArr=[],afterArr=[];
-    for(const f of sample){const base=Number(f.baseline);const lam=Math.max(0,base-saved);baseArr.push(base);afterArr.push(poisson(lam,rng));}
-    const mean=a=>a.reduce((x,y)=>x+y,0)/(a.length||1);
-    return {base:mean(baseArr), after:mean(afterArr)};
-  }
-
-  function run(){
-    const s=getSettings();
-    const results=[];
-    const rng=mulberry32((s.seed>>>0)||1234);
-    for(let t=0;t<s.trials;t++){results.push(simulateOnce(s.policy,s.N,rng));}
-    const baseVals=results.map(r=>r.base), afterVals=results.map(r=>r.after);
-    const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
-    const stderr=a=>{const m=mean(a);return Math.sqrt(a.map(x=>(x-m)**2).reduce((x,y)=>x+y,0)/(a.length-1))/Math.sqrt(a.length);};
-    const baseMean=mean(baseVals), afterMean=mean(afterVals);
-    const baseErr=stderr(baseVals), afterErr=stderr(afterVals);
-
-    Plotly.react('avg_chart',[{
-      x:['Baseline','After ('+s.scenName+')'],
-      y:[baseMean,afterMean],
-      error_y:{type:'data',array:[baseErr,afterErr],visible:true},
+  function render(r, scenName, trials){
+    Plotly.react('avg_chart', [{
+      x:['Baseline','After ('+scenName+')'],
+      y:[r.baselineAvg, r.afterAvg],
+      error_y:{type:'data', array:[r.baselineErr, r.afterErr], visible:true},
       type:'bar',
-      text:[baseMean.toFixed(2),afterMean.toFixed(2)],
+      text:[r.baselineAvg.toFixed(2), r.afterAvg.toFixed(2)],
       textposition:'auto'
-    }],{yaxis:{title:'Absence Days'}},{displayModeBar:false});
+    }], { yaxis:{title:'Absence Days'}, title:'Based on '+trials+' trials' }, {displayModeBar:false});
 
-    document.getElementById('summary').textContent=`Based on ${s.trials} trials with N=${s.N} families.`;
+    Plotly.react('hist_chart', [
+      { x:r.baselineArr, type:'histogram', opacity:.6, name:'Baseline' },
+      { x:r.afterArr,    type:'histogram', opacity:.6, name:'After ('+scenName+')' }
+    ], { barmode:'overlay', xaxis:{title:'Absence Days'}, yaxis:{title:'Families'}, legend:{orientation:'h'} }, {displayModeBar:false});
   }
 
+  function run(){ const s=getSettings(); const r=simulate(s.policy,s.N,s.seed,s.trials); render(r,s.scenName,s.trials); }
   function init(){
     const sel=document.getElementById('scenario');
-    for(const name of Object.keys(SCENARIOS)){const o=document.createElement('option');o.value=name;o.textContent=name;sel.appendChild(o);}
+    for(const name of Object.keys(SCENARIOS)){ const o=document.createElement('option'); o.value=name; o.textContent=name; sel.appendChild(o); }
     document.getElementById('sample_n').value=FAMILIES.length;
     document.getElementById('btn_run').addEventListener('click',run);
     run();
   }
-  document.addEventListener('DOMContentLoaded',init);
+  document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>

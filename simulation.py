@@ -215,39 +215,25 @@ def build_anim_df(
     return pd.DataFrame(recs)
 
 # ────────────────────────────────────────────────────────────────────────────
-# 4) INTERACTIVE SIMULATOR (pure client-side HTML+JS) — race mix + scenarios
+# 4) INTERACTIVE SIMULATOR (pure client-side HTML+JS) — intervention only
 # ────────────────────────────────────────────────────────────────────────────
-
-import json, os  # keep here so this block is self-contained
-
 def write_interactive_simulator(families: list[dict], betas: dict, out_path: str) -> None:
     """
-    Minimal interactive simulator:
-      - Controls: Scenario (intervention), race/ethnicity mix (%), sample size, seed
-      - 'After' is simulated using BETAS and the chosen scenario:
-            saved_days = Σ_m betas[m] * policy[m]
-            lambda_after = max(0, baseline - saved_days)
-            after_days ~ Poisson(lambda_after)
-      - Deterministic given (scenario, race mix, sample size, seed).
+    Interactive simulator:
+      Controls: Scenario, Sample size, Seed, Trials
+      Model:
+        saved_days = Σ_m betas[m] * policy[m]
+        λ_after    = max(0, baseline - saved_days)
+        after      ~ Poisson(λ_after)
+      Runs multiple trials → shows averages with error bars and full distribution.
     """
-    # --- Race shares from current dataset ---
-    races = sorted({f['race'] for f in families})
-    counts = {r: 0 for r in races}
-    for f in families:
-        counts[f['race']] += 1
-    total = sum(counts.values()) or 1
-    shares = {r: counts[r] / total for r in races}
-
-    # --- Trim payload for client (only what we actually use in JS) ---
     families_min = [{
         "baseline":   float(f["baseline"]),
         "loneliness": float(f["loneliness"]),
         "worry":      float(f["worry"]),
         "overwhelm":  float(f["overwhelm"]),
-        "race":       f["race"],
     } for f in families]
 
-    # --- Scenario deltas (Likert points) ---
     scenarios = {
         "No Intervention": {"loneliness": 0.0,  "worry": 0.0, "overwhelm": 0.0},
         "Ads Simple":      {"loneliness": 0.00, "worry": 0.0, "overwhelm": 0.0},
@@ -255,7 +241,6 @@ def write_interactive_simulator(families: list[dict], betas: dict, out_path: str
         "Animal Therapy":  {"loneliness": 0.80, "worry": 0.0, "overwhelm": 0.0},
     }
 
-    # --- HTML template (kept compact & clear) ---
     html = r"""<!DOCTYPE html>
 <html>
 <head>
@@ -263,23 +248,27 @@ def write_interactive_simulator(families: list[dict], betas: dict, out_path: str
   <title>Family Absence Simulator</title>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 1.25rem; }
-    .row { display:flex; gap:1rem; flex-wrap:wrap; }
-    .card { border:1px solid #ddd; border-radius:10px; padding:1rem; flex:1; min-width:300px; }
-    .grid { display:grid; grid-template-columns: 1fr 110px; gap:.5rem 1rem; align-items:center; }
-    select, input { padding:.3rem; border:1px solid #ccc; border-radius:6px; }
-    button { padding:.5rem 1rem; border:1px solid #ccc; border-radius:8px; background:#fafafa; cursor:pointer; }
-    button:hover { background:#f0f0f0; }
-    h1 { margin:.2rem 0 1rem; }
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:1.25rem;}
+    .row{display:flex;gap:1rem;flex-wrap:wrap;}
+    .card{border:1px solid #ddd;border-radius:10px;padding:1rem;flex:1;min-width:300px;}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem 1rem;align-items:center;}
+    select,input{padding:.35rem;border:1px solid #ccc;border-radius:6px;}
+    button{padding:.5rem 1rem;border:1px solid #ccc;border-radius:8px;background:#fafafa;cursor:pointer;}
+    button:hover{background:#f0f0f0;}
+    h1{margin:.2rem 0 1rem;}
   </style>
 </head>
 <body>
   <h1>🏠 Family Absence Simulator</h1>
+  <p style="max-width:720px;color:#444;">
+    Choose an intervention and simulate its effect on absence days. Results show averages with error bars (uncertainty)
+    and the full distribution of simulated absence days. This helps policymakers see both expected impacts and variability.
+  </p>
 
   <div class="row">
-    <div class="card" style="max-width:440px;">
+    <div class="card" style="max-width:420px;">
       <h2>Settings</h2>
-      <div class="grid" style="grid-template-columns: 1fr 1fr;">
+      <div class="grid">
         <div>Scenario</div>
         <select id="scenario"></select>
 
@@ -288,19 +277,17 @@ def write_interactive_simulator(families: list[dict], betas: dict, out_path: str
 
         <div>Seed</div>
         <input id="seed" type="number" step="1" value="1234">
+
+        <div>Trials</div>
+        <input id="trials" type="number" min="1" step="1" value="30">
       </div>
-
-      <h3 style="margin-top:1rem;">Race/Ethnicity Composition (%)</h3>
-      <div class="grid" id="race_inputs"></div>
-      <p style="color:#555; font-size:.9rem;">Values auto-normalize to 100%.</p>
-
       <div style="margin-top:.75rem;">
         <button id="btn_run">Run Simulation</button>
       </div>
     </div>
 
     <div class="card">
-      <h2>Average Absences</h2>
+      <h2>Average Absences (± error)</h2>
       <div id="avg_chart" style="height:300px;"></div>
     </div>
   </div>
@@ -313,145 +300,86 @@ def write_interactive_simulator(families: list[dict], betas: dict, out_path: str
   </div>
 
 <script>
-  // ---------- Injected from Python ----------
-  const FAMILIES   = %%FAMILIES_JSON%%;
-  const RACES      = %%RACES_JSON%%;
-  const INIT_SHARE = %%RACE_SHARES_JSON%%;
-  const BETAS      = %%BETAS_JSON%%;
-  const SCENARIOS  = %%SCENARIOS_JSON%%;
+  const FAMILIES  = %%FAMILIES_JSON%%;
+  const BETAS     = %%BETAS_JSON%%;
+  const SCENARIOS = %%SCENARIOS_JSON%%;
 
-  // ---------- Minimal RNG + Poisson ----------
   function mulberry32(a){return function(){var t=a+=0x6D2B79F5;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;}}
   function poisson(lam,rng){ if(lam<=0) return 0; const L=Math.exp(-lam); let k=0,p=1; do{ k++; p*=rng(); }while(p>L); return k-1; }
 
-  // ---------- Seeded resampling by race (uses rng() everywhere) ----------
-  function resampleFamilies(N, weights, rng){
-    const buckets = {}; for(const r of RACES) buckets[r]=[];
-    for(const f of FAMILIES){ if(!buckets[f.race]) buckets[f.race]=[]; buckets[f.race].push(f); }
-
-    const races = RACES.slice();
-    const w = races.map(r => Math.max(0, weights[r] || 0));
-    const sumw = w.reduce((a,b)=>a+b,0) || 1;
-
-    const cw = []; let acc = 0;
-    for(let i=0;i<w.length;i++){ acc += w[i]/sumw; cw.push(acc); }
-
-    const pickRace = () => {
-      const u = rng();                                 // seeded
-      for(let i=0;i<cw.length;i++){ if(u <= cw[i]) return races[i]; }
-      return races[races.length-1];
-    };
-
-    const out = [];
-    for(let i=0;i<N;i++){
-      const r = pickRace();
-      const pool = buckets[r].length ? buckets[r] : FAMILIES;
-      const idx  = Math.floor(rng() * pool.length);    // seeded
-      out.push(Object.assign({}, pool[idx]));
-    }
+  function sampleFamilies(N, rng){
+    const out=[]; for(let i=0;i<N;i++){ const idx=Math.floor(rng()*FAMILIES.length); out.push(FAMILIES[idx]); }
     return out;
   }
 
-  // ---------- Read controls ----------
   function getSettings(){
-    const scenName = document.getElementById('scenario').value;
-    const policy   = SCENARIOS[scenName];
-
-    const raw = {}; let sum = 0;
-    for(const r of RACES){
-      const v = parseFloat(document.getElementById('rw_'+r).value) || 0;
-      raw[r] = Math.max(0, v); sum += raw[r];
-    }
-    const weights = {};
-    if(sum===0){ for(const r of RACES) weights[r]=1/RACES.length; }
-    else{ for(const r of RACES) weights[r]=raw[r]/sum; }
-
-    const N    = Math.max(10, parseInt(document.getElementById('sample_n').value || "10", 10));
-    const seed = parseInt(document.getElementById('seed').value || "1234", 10);
-    return {policy, weights, N, seed, scenName};
+    const scenName=document.getElementById('scenario').value;
+    const N=Math.max(10, parseInt(document.getElementById('sample_n').value||"10",10));
+    const seed=parseInt(document.getElementById('seed').value||"1234",10);
+    const trials=Math.max(1, parseInt(document.getElementById('trials').value||"30",10));
+    return { scenName, policy:SCENARIOS[scenName], N, seed, trials };
   }
 
-  // ---------- Core simulation ----------
-  function simulateOnce(policy, weights, N, seed){
-    const rng = mulberry32((seed>>>0) || 1234);
-    const sample = resampleFamilies(N, weights, rng);
-    const baseline=[], after=[];
-    for(const f of sample){
-      const saved =
-        (BETAS.loneliness||0)*(policy.loneliness||0) +
-        (BETAS.worry||0)*(policy.worry||0) +
-        (BETAS.overwhelm||0)*(policy.overwhelm||0);
-      const lam = Math.max(0, Number(f.baseline) - saved);
-      baseline.push(Number(f.baseline));
-      after.push(poisson(lam, rng));  // seeded
+  function simulate(policy, N, seed, trials){
+    const baselineAvgs=[], afterAvgs=[], baselineAll=[], afterAll=[];
+    for(let t=0;t<trials;t++){
+      const rng=mulberry32(seed+t);
+      const sample=sampleFamilies(N,rng);
+      const saved=(BETAS.loneliness||0)*(policy.loneliness||0)+(BETAS.worry||0)*(policy.worry||0)+(BETAS.overwhelm||0)*(policy.overwhelm||0);
+      const baseline=[], after=[];
+      for(const f of sample){
+        const base=Number(f.baseline);
+        const lam=Math.max(0, base - saved);
+        baseline.push(base); after.push(poisson(lam,rng));
+      }
+      baselineAvgs.push(baseline.reduce((a,b)=>a+b,0)/baseline.length);
+      afterAvgs.push(after.reduce((a,b)=>a+b,0)/after.length);
+      baselineAll.push(...baseline); afterAll.push(...after);
     }
-    const mean = a => a.reduce((x,y)=>x+y,0) / (a.length || 1);
-    return { baselineAvg:mean(baseline), afterAvg:mean(after), baselineArr:baseline, afterArr:after };
+    function mean(a){return a.reduce((x,y)=>x+y,0)/a.length;}
+    function std(a){const m=mean(a); return Math.sqrt(a.reduce((s,v)=>s+(v-m)**2,0)/a.length);}
+    return {
+      baselineAvg:mean(baselineAvgs), afterAvg:mean(afterAvgs),
+      baselineErr:std(baselineAvgs), afterErr:std(afterAvgs),
+      baselineArr:baselineAll, afterArr:afterAll
+    };
   }
 
-  // ---------- Plots ----------
-  function render(r, scenName){
+  function render(r, scenName, trials){
     Plotly.react('avg_chart', [{
       x:['Baseline','After ('+scenName+')'],
       y:[r.baselineAvg, r.afterAvg],
+      error_y:{type:'data', array:[r.baselineErr, r.afterErr], visible:true},
       type:'bar',
       text:[r.baselineAvg.toFixed(2), r.afterAvg.toFixed(2)],
       textposition:'auto'
-    }], { yaxis:{title:'Absence Days'} }, {displayModeBar:false});
+    }], { yaxis:{title:'Absence Days'}, title:'Based on '+trials+' trials' }, {displayModeBar:false});
 
     Plotly.react('hist_chart', [
       { x:r.baselineArr, type:'histogram', opacity:.6, name:'Baseline' },
       { x:r.afterArr,    type:'histogram', opacity:.6, name:'After ('+scenName+')' }
-    ], {
-      barmode:'overlay',
-      xaxis:{ title:'Absence Days' },
-      yaxis:{ title:'Families' },
-      legend:{ orientation:'h' }
-    }, {displayModeBar:false});
+    ], { barmode:'overlay', xaxis:{title:'Absence Days'}, yaxis:{title:'Families'}, legend:{orientation:'h'} }, {displayModeBar:false});
   }
 
-  // ---------- Wire-up ----------
-  function run(){
-    const s = getSettings();
-    const r = simulateOnce(s.policy, s.weights, s.N, s.seed);
-    render(r, s.scenName);
-  }
-
+  function run(){ const s=getSettings(); const r=simulate(s.policy,s.N,s.seed,s.trials); render(r,s.scenName,s.trials); }
   function init(){
-    // scenarios
-    const sel = document.getElementById('scenario');
-    for(const name of Object.keys(SCENARIOS)){
-      const o = document.createElement('option'); o.value=name; o.textContent=name; sel.appendChild(o);
-    }
-
-    // race inputs
-    const c = document.getElementById('race_inputs');
-    for(const r of RACES){
-      const lab = document.createElement('div'); lab.textContent = r;
-      const inp = document.createElement('input'); inp.type='number'; inp.min='0'; inp.step='1';
-      inp.id = 'rw_'+r; inp.value = Math.round((INIT_SHARE[r]||0)*100);
-      c.appendChild(lab); c.appendChild(inp);
-    }
-
-    document.getElementById('sample_n').value = FAMILIES.length;
-    document.getElementById('btn_run').addEventListener('click', run);
-    run(); // initial render
+    const sel=document.getElementById('scenario');
+    for(const name of Object.keys(SCENARIOS)){ const o=document.createElement('option'); o.value=name; o.textContent=name; sel.appendChild(o); }
+    document.getElementById('sample_n').value=FAMILIES.length;
+    document.getElementById('btn_run').addEventListener('click',run);
+    run();
   }
-
   document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
 """
 
-    # --- Inject data into placeholders ---
-    html = html.replace("%%FAMILIES_JSON%%",    json.dumps(families_min))
-    html = html.replace("%%RACES_JSON%%",       json.dumps(races))
-    html = html.replace("%%RACE_SHARES_JSON%%", json.dumps(shares))
-    html = html.replace("%%BETAS_JSON%%",       json.dumps(betas))
-    html = html.replace("%%SCENARIOS_JSON%%",   json.dumps(scenarios))
+    import json, os
+    html = html.replace("%%FAMILIES_JSON%%", json.dumps(families_min))
+    html = html.replace("%%BETAS_JSON%%", json.dumps(betas))
+    html = html.replace("%%SCENARIOS_JSON%%", json.dumps(scenarios))
 
-    # --- Write file ---
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(html)
