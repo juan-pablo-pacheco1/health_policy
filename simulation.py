@@ -20,8 +20,9 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 
+
 # ────────────────────────────────────────────────────────────────────────────
-# 1. DATA CLEAN & PREP
+# 1) DATA CLEAN & PREP  (1–5 Likert, higher = worse)
 # ────────────────────────────────────────────────────────────────────────────
 
 RACE_MAP = {
@@ -35,41 +36,73 @@ RACE_MAP = {
     '8': "Some other race"
 }
 
-LIKERT_COLS = ['lonely_freq_s2', 'fs_feeling_s2', 'fs_worry_s2']
-CHILD_COLS = ['missed_days_s2']  # baseline absences
-OPTIONAL_COLS = ['child_age']    # optional; if present, simulator exposes age shift control
+LIKERT_COLS   = ['lonely_freq_s2', 'fs_feeling_s2', 'fs_worry_s2']
+CHILD_COLS    = ['missed_days_s2']
+OPTIONAL_COLS = ['child_age']
 
+def _clamp_int_15(x: float):
+    """Round to nearest int in [1,5]; return NaN if input is NaN."""
+    if pd.isna(x):
+        return np.nan
+    return int(max(1, min(5, round(float(x)))))
+
+def _reverse_1to10_higher_better(x: float) -> float:
+    """Flip a 1..10 scale where 10=best to 1..10 where 10=worst (i.e., y=11-x)."""
+    if pd.isna(x):
+        return np.nan
+    return 11.0 - float(x)
+
+def _map_1to10_to_1to5(x: float):
+    """Linear map 1..10 (higher=worse) → 1..5 (higher=worse), then clamp/round."""
+    if pd.isna(x):
+        return np.nan
+    y = 1.0 + (float(x) - 1.0) * (4.0/9.0)  # exact endpoints: 1->1, 10->5
+    return _clamp_int_15(y)
 
 def load_and_clean(df_raw: pd.DataFrame) -> pd.DataFrame:
-    """Coerce numeric columns, drop missing, and enforce Likert 1..5 on well-being items."""
+    """
+    Coerce numeric, harmonize to 1..5 integers (higher = worse),
+    and drop rows with missing required fields.
+    """
     df = df_raw.copy()
-    for c in LIKERT_COLS + CHILD_COLS + [c for c in OPTIONAL_COLS if c in df.columns]:
+
+    # numeric coercion
+    for c in set(LIKERT_COLS + CHILD_COLS + [c for c in OPTIONAL_COLS if c in df.columns]):
         df[c] = pd.to_numeric(df[c], errors='coerce')
 
-    # drop missing rows
-    df = df.dropna(subset=LIKERT_COLS + CHILD_COLS)
-    # we keep only values where all corresponding values for loneliness, worry, and overwhwelm are valid Likert numbers-- no negatives or > 5
-    df = df[df[LIKERT_COLS].isin([1, 2, 3, 4, 5]).all(axis=1)]
+    # loneliness is already 1..5, higher=worse → clamp/round to be safe
+    df['loneliness_5'] = df['lonely_freq_s2'].apply(_clamp_int_15)
+
+    # feeling & worry are 1..10 where higher=better → flip to higher=worse, then map to 1..5
+    df['overwhelm_5'] = df['fs_feeling_s2'].apply(_reverse_1to10_higher_better).apply(_map_1to10_to_1to5)
+    df['worry_5']     = df['fs_worry_s2'].apply(_reverse_1to10_higher_better).apply(_map_1to10_to_1to5)
+
+    # drop rows missing any required fields
+    needed = ['loneliness_5', 'overwhelm_5', 'worry_5'] + CHILD_COLS
+    df = df.dropna(subset=needed).copy()
+
+    # ensure bounds
+    df = df[
+        df['loneliness_5'].between(1,5) &
+        df['overwhelm_5'].between(1,5) &
+        df['worry_5'].between(1,5)
+    ].copy()
+
     return df
 
-
 def make_families(df: pd.DataFrame) -> list[dict]:
-    """Return list of family dicts with numeric types and readable race strings."""
+    """Build family dicts using 1..5 integers (higher = worse) for all three metrics."""
     fams = []
     for _, r in df.iterrows():
-        # remove spaces
         code = str(r.get('race_ethn_cmc', '')).strip()
-        # we get the race code and convert it into a readable string that expresses the actual race (not a number)
-        # If code is not found, the default is "Prefer not/missing"
         race = RACE_MAP.get(code, "Prefer not/missing")
         fams.append({
             'id':         str(r['record_id']),
-            'baseline':   float(r['missed_days_s2']),   # child's absence days
-            'overwhelm':  float(r['fs_feeling_s2']),    # Likert 1-5
-            'worry':      float(r['fs_worry_s2']),      # Likert 1-5
-            'loneliness': float(r['lonely_freq_s2']),   # Likert 1-5
+            'baseline':   float(r['missed_days_s2']),
+            'overwhelm':  int(r['overwhelm_5']),   # 1..5, higher = worse
+            'worry':      int(r['worry_5']),       # 1..5, higher = worse
+            'loneliness': int(r['loneliness_5']),  # 1..5, higher = worse
             'race':       race,
-            # notna--> not missing
             'child_age':  float(r['child_age']) if 'child_age' in df.columns and pd.notna(r['child_age']) else None,
         })
     return fams
@@ -222,6 +255,13 @@ def write_interactive_simulator(families: list[dict], betas: dict, out_path: str
     Interactive simulator:
       Controls: Scenario, Sample size, Seed, Trials
       Model:
+
+        # betas = the number of days saved per +1 point improvement in Likert scale 
+          (e.g., if loneliness improved +1 point, then there would be x number of days saved, where 
+          x = beta for loneliness)
+        # policy[m] = how many likert points the policy affects m (e.g., loneliness) 
+        # m = loneliness, worry, overwhelm
+
         saved_days = Σ_m betas[m] * policy[m]
         λ_after    = max(0, baseline - saved_days)
         after      ~ Poisson(λ_after)
@@ -392,8 +432,8 @@ if __name__ == "__main__":
     # regression‑derived days‐saved per +1‑point improvement
     # DO NOT CHANGE
     BETAS = {
-        'overwhelm':   0.0379915,
-        'worry':       0.1098821,
+        'overwhelm':   0.0379915, # NEED TO CHANGE
+        'worry':       0.1098821, # NEED TO CHANGE!!
         'loneliness':  0.453555
     }
 
