@@ -2,27 +2,159 @@
 <html>
 <head>
     <meta charset='utf-8'>
-    <title>Family Digital Twin</title>
+    <title>Caregiver Mental Health & School Absence Simulator</title>
     <style>
-        body { font-family: -apple-system, sans-serif; margin: 3rem auto; max-width: 600px; }
-        h1 { color: #333; }
-        a { 
-            display: block; 
-            margin: 1rem 0; 
-            padding: 1rem; 
-            background: #4CAF50; 
-            color: white; 
-            text-decoration: none; 
-            border-radius: 8px; 
-            text-align: center;
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            margin: 0;
+            padding: 3rem;
+            background: #f8f9fa;
         }
-        a:hover { background: #45a049; }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 3rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 { 
+            color: #2c3e50;
+            margin-bottom: .5rem;
+        }
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 1.1rem;
+            margin-bottom: 2rem;
+        }
+        .tool-section {
+            margin: 2rem 0;
+        }
+        .tool-card {
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            border-radius: 8px;
+            transition: transform .2s, box-shadow .2s;
+        }
+        .tool-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .tool-card h3 {
+            margin: 0 0 .5rem;
+            color: #2c3e50;
+        }
+        .tool-card p {
+            margin: .5rem 0 1rem;
+            color: #555;
+            line-height: 1.6;
+        }
+        .confidence-badge {
+            display: inline-block;
+            padding: .25rem .75rem;
+            border-radius: 12px;
+            font-size: .75rem;
+            font-weight: 600;
+            margin-left: .5rem;
+        }
+        .high-confidence {
+            background: #d4edda;
+            color: #155724;
+        }
+        .exploratory {
+            background: #fff3cd;
+            color: #856404;
+        }
+        a.btn { 
+            display: inline-block;
+            padding: .75rem 1.5rem;
+            background: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: background .2s;
+        }
+        a.btn:hover { 
+            background: #2980b9;
+        }
+        .methodology {
+            background: #e7f3ff;
+            border-left: 4px solid #0066cc;
+            padding: 1.5rem;
+            margin: 2rem 0;
+            border-radius: 8px;
+        }
+        .methodology h3 {
+            margin-top: 0;
+            color: #004085;
+        }
+        .methodology ul {
+            margin: .5rem 0;
+            padding-left: 1.5rem;
+        }
+        .methodology li {
+            margin: .5rem 0;
+            color: #004085;
+            line-height: 1.6;
+        }
     </style>
 </head>
 <body>
-    <h1>📊 Family Absence Digital Twin</h1>
-    <p>Track how each family responds to different interventions</p>
-    <a href='family_tracker.html'>View Family Tracker</a>
-    <a href='simulator.html'>Interactive Simulator</a>
+    <div class="container">
+        <div style="background:#fff3cd;border-left:4px solid #ffc107;padding:1.5rem;margin-bottom:2rem;border-radius:8px;">
+            <h3 style="margin-top:0;color:#856404;">⚠️ Prototype Disclaimer</h3>
+            <p style="color:#856404;line-height:1.6;margin:.5rem 0;">
+                This simulator is a <strong>research prototype</strong> with limited validation. While core parameters are derived from peer-reviewed literature and Family CIRCLE data analysis, several aspects require further refinement including but not limited to: (1) comprehensive unit testing of all functions, (2) independent verification of computational accuracy, (3) validation of mathematical and software-engineering methods, and (4) peer review of methodology. Users should interpret results as exploratory estimates rather than definitive predictions.
+            </p>
+        </div>
+
+        <h1>📊 Caregiver Mental Health & School Absence Simulator</h1>
+        <p class="subtitle">Interactive tools showing how caregiver-focused interventions reduce school absences</p>
+
+        <div class="methodology">
+            <h3>🔬 Research Foundation</h3>
+            <ul>
+                <li><strong>Study Population:</strong> Families with medically complex children (CMC) - Family CIRCLE data analysis</li>
+                <li><strong>Key Finding:</strong> When caregiver loneliness improves by 1 point → child absences decrease by 0.48 days (β = 0.482) - Family CIRCLE data analysis</li>
+                <li><strong>Interventions:</strong> Multicomponent programs and group counseling targeting caregiver mental health</li>
+                <li><strong>Evidence Base:</strong> 
+                    <ul style="margin-top:.5rem;">
+                        <li>Regression coefficient (β = 0.482): Family CIRCLE data analysis</li>
+                        <li>Multicomponent programs (SMD -0.67 → 0.80 point improvement): <a href="https://jamanetwork.com/journals/jamanetworkopen/fullarticle/2797399" target="_blank" style="color:#0066cc;">Hoang et al., JAMA Network Open, 2022</a></li>
+                        <li>Group counseling (SMD -0.19 → 0.23 point improvement): <a href="https://jamanetwork.com/journals/jamanetworkopen/fullarticle/2797399" target="_blank" style="color:#0066cc;">Hoang et al., JAMA Network Open, 2022</a></li>
+                    </ul>
+                </li>
+            </ul>
+        </div>
+
+        <div class="tool-section">
+            <div class="tool-card">
+                <h3>🏠 Family Tracker <span class="confidence-badge high-confidence">HIGH CONFIDENCE</span></h3>
+                <p>Track how each individual CMC family responds across all interventions (No Intervention, Multicomponent Program, Group Counseling). See every family's trajectory with uncertainty bars showing variation across 30 simulation trials.</p>
+                <a href='family_tracker.html' class="btn">View Family Tracker</a>
+            </div>
+
+            <div class="tool-card">
+                <h3>🔬 CMC Interactive Simulator <span class="confidence-badge high-confidence">HIGH CONFIDENCE</span></h3>
+                <p>Simulate interventions on the CMC population with adjustable parameters (sample size, trials, random seed). Based directly on measured CMC data with transparent calculation methodology showing exactly how days saved are computed.</p>
+                <a href='cmc_simulator.html' class="btn">Open CMC Simulator</a>
+            </div>
+
+            <div class="tool-card" style="border-left-color: #ffc107;">
+                <h3>🌎 General Population Exploratory <span class="confidence-badge exploratory">EXPLORATORY</span></h3>
+                <p>Explore potential impact if CMC findings extend to all US children (73M). Shows three scenarios (conservative, middle, optimistic) with explicit assumptions about how much the CMC effect transfers. Use for understanding potential scale, not as confirmed findings.</p>
+                <a href='general_population.html' class="btn" style="background: #ffc107; color: #000;">Open Exploratory Tool</a>
+            </div>
+        </div>
+
+        <div style="margin-top: 3rem; padding-top: 2rem; border-top: 2px solid #e1e8ed; color: #7f8c8d; font-size: .9rem;">
+            <p><strong>Note on Evidence Levels:</strong></p>
+            <p><strong>High Confidence:</strong> Based on direct measurement in CMC families from survey data and established statistical methods.</p>
+            <p><strong>Exploratory:</strong> Extrapolated estimates based on reasonable assumptions but without direct measurement. Wide uncertainty ranges acknowledge limited evidence.</p>
+        </div>
+    </div>
 </body>
 </html>

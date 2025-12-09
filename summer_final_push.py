@@ -12,8 +12,7 @@
 # - The per-scenario scatter plots label X as "Families (anonymized)" and Y as "Absence Days".
 # - The interactive page lets users tweak betas, policy improvements, race mix, Likert shifts, sample size, seed,
 #   and (optionally) a mean age shift if 'child_age' exists in data.csv.
-
-# NEED TO ENSURE RACE IS AS IS AND REGRESSION COEFFF
+# THIS IS THE LIST ONE-- NOT THE GREEN BUTTONS ONE :(
 
 import os
 import json
@@ -24,10 +23,9 @@ import plotly.express as px
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# 1. DATA CLEAN & PREP  (1–5 Likert, higher = worse)
+# 1) DATA CLEAN & PREP  (1–5 Likert, higher = worse)
 # ────────────────────────────────────────────────────────────────────────────
 
-# THIS IS ONLY CMC
 RACE_MAP = {
     '1': "American Indian/Alaska Native",
     '2': "Black/African American",
@@ -59,8 +57,6 @@ def _map_1to10_to_1to5(x: float):
     """Linear map 1..10 (higher=worse) → 1..5 (higher=worse), then clamp/round."""
     if pd.isna(x):
         return np.nan
-    # linear scaling formula--- 
-    # new_value = new_min + (old_value - old_min) * (new_range / old_range)
     y = 1.0 + (float(x) - 1.0) * (4.0/9.0)  # exact endpoints: 1->1, 10->5
     return _clamp_int_15(y)
 
@@ -253,7 +249,7 @@ def build_anim_df(
     return pd.DataFrame(recs)
 
 # ────────────────────────────────────────────────────────────────────────────
-# 4. INTERACTIVE SIMULATOR (pure client-side HTML+JS) — intervention only
+# 4) INTERACTIVE SIMULATOR (pure client-side HTML+JS) — intervention only
 # ────────────────────────────────────────────────────────────────────────────
 def write_interactive_simulator(families: list[dict], betas: dict, out_path: str) -> None:
     """
@@ -266,9 +262,6 @@ def write_interactive_simulator(families: list[dict], betas: dict, out_path: str
           x = beta for loneliness)
         # policy[m] = how many likert points the policy affects m (e.g., loneliness) 
         # m = loneliness, worry, overwhelm
-
-        # we choose poisson distribution since we want to model counting data. 
-        # baseline-days saved = new number of days absent, so are we saying center the poisson around that.
 
         saved_days = Σ_m betas[m] * policy[m]
         λ_after    = max(0, baseline - saved_days)
@@ -285,8 +278,8 @@ def write_interactive_simulator(families: list[dict], betas: dict, out_path: str
     scenarios = {
         "No Intervention": {"loneliness": 0.0,  "worry": 0.0, "overwhelm": 0.0},
         "Ads Simple":      {"loneliness": 0.00, "worry": 0.0, "overwhelm": 0.0},
-        "Cbt":             {"loneliness": 0.624, "worry": 0.0, "overwhelm": 0.0},
-        "Animal Therapy":  {"loneliness": 0.49, "worry": 0.0, "overwhelm": 0.0},
+        "Cbt":             {"loneliness": 0.27, "worry": 0.0, "overwhelm": 0.0},
+        "Animal Therapy":  {"loneliness": 0.80, "worry": 0.0, "overwhelm": 0.0},
     }
 
     html = r"""<!DOCTYPE html>
@@ -440,10 +433,10 @@ if __name__ == "__main__":
     # regression‑derived days‐saved per +1‑point improvement
     # DO NOT CHANGE
     BETAS = {
-    'overwhelm':   0.1817621,
-    'worry':       0.1026722,
-    'loneliness':  0.4822393
-}
+        'overwhelm':   0.0379915, # NEED TO CHANGE
+        'worry':       0.1098821, # NEED TO CHANGE!!
+        'loneliness':  0.453555
+    }
 
     # load & clean
     df_raw = pd.read_csv("data.csv", dtype=str)
@@ -468,13 +461,17 @@ if __name__ == "__main__":
         # How we mapped SMDs to a 1–5 scale
         # The following is how results from the JAMA study were translated to be used in Family Circle:
         # Standardized Mean Difference (SMD) expresses change in units of the pooled standard deviation.
-
+        # On our 1–5 loneliness scale, a “1‑point” change is roughly one SD in many of these studies.
+        # Thus we treated each SMD ≈ Δ raw‑points:
+        # CBT: SMD ~ –0.52→ Δ ≈ –0.5 → used –0.27 (conservative midpoint of –0.52/–0.46)
+        # Multicomponent: average SMD ~ –0.60 → rounded to –0.50
+        # Animal therapy: SMD ~ –1.86 (LTC) but community studies ~ –0.80 → used –0.80
         # ADS: SMD ~ 0 → Δ = 0
 
         # CBT
          # Small reduction in loneliness from cognitive‑behavioral therapy interventions
-            # Meta‑analysis of 7 RCTs in older adults:  https://pmc.ncbi.nlm.nih.gov/articles/PMC9577679/?utm_source=chatgpt.com
-            
+            # Meta‑analysis of 7 RCTs in older adults: SMD = −0.27 on loneliness scales: https://pmc.ncbi.nlm.nih.gov/articles/PMC9577679/?utm_source=chatgpt.com
+            # conservative central estimate between those two (−0.52 and −0.46), arriving at −0.27 points on our 1–5 scale (i.e. roughly half an SMD unit).
 
             # MORE INFO: 
             # “CBT and Psychotherapy
@@ -487,7 +484,7 @@ if __name__ == "__main__":
             # also measured social isolation, with an ES of 0.16 (95% CI, −0.06 to 0.38).
 
         # ANIMAL THERAPY
-         # Large effect from animal‑assisted interventions in long‑term care:
+         # Large effect from animal‑assisted interventions in long‑term care: SMD ≈ −0.80
             # Systematic review & meta‑analysis : https://pmc.ncbi.nlm.nih.gov/articles/PMC9577679/?utm_source=chatgpt.com
 
             # MORE INFO:
@@ -503,159 +500,156 @@ if __name__ == "__main__":
             # for the study duration
     scenarios = {
         'Ads Simple':     {'loneliness': 0.00},
-        'Cbt':            {'loneliness': 0.624},
-        'Animal Therapy': {'loneliness': 0.49},
+        'Cbt':            {'loneliness': 0.27},
+        'Animal Therapy': {'loneliness': 0.80},
     }
 
 # ────────────────────────────────────────────────────────────────────────────
-# 6. POST-BLOCK AUGMENTATIONS (do NOT modify the block above)
+# 6) POST-BLOCK AUGMENTATIONS (do NOT modify the block above)
 # ────────────────────────────────────────────────────────────────────────────
 
-    # Add "No Intervention" baseline
-    scenarios = {'No Intervention': {}} | scenarios
-    
-    # Prepare outputs
+    # (A) Add "No Intervention" scenario without editing your verbatim block
+    scenarios = {'No Intervention': {}} | scenarios  # requires Python 3.9+
+
+    # (B) Prepare outputs
+    out_files: list[tuple[str, str]] = []
+    all_anim: list[pd.DataFrame] = []
     os.makedirs("docs", exist_ok=True)
-    
-    # Run all scenarios with same seed for consistent family tracking
-    # all_results = {}
-   # for name, policy in scenarios.items():
-       # all_results[name] = run_sim(families, BETAS, policy, seed=42)
 
-    # Run multiple trials and calculate mean + std for each family
-    n_trials = 30
-    all_results = {}
+    # (C) Per-scenario animated scatter with clear axis labels
+    for pretty, policy in scenarios.items():
+        anim_df = build_anim_df(families, BETAS, policy, seed=42)
+        anim_df['scenario'] = pretty
+        all_anim.append(anim_df)
 
-    for name, policy in scenarios.items():
-        # Run multiple trials for this scenario
-        trial_results = []
-        for trial in range(n_trials):
-            trial_results.append(run_sim(families, BETAS, policy, seed=42+trial))
-        
-        # Calculate mean and std across trials for each family
-        averaged_results = []
-        for i in range(len(families)):
-            # Get this family's results across all trials
-            family_outcomes = [trial[i]['after'] for trial in trial_results]
-            
-            # Create result with mean and std for this family
-            avg_result = trial_results[0][i].copy()  # Copy structure from first trial
-            avg_result['after'] = np.mean(family_outcomes)  # Mean across trials
-            avg_result['after_std'] = np.std(family_outcomes)  # Std across trials
-            averaged_results.append(avg_result)
-        
-        all_results[name] = averaged_results
-        
-    # Import plotly graph objects
-    import plotly.graph_objects as go
-    
-# Build simple tracking data
-rows = []
-for i, fam in enumerate(families):
-    row = {
-        'Family': f"Family {i+1}",
-        'ID': fam['id'],
-        'Child race': fam['race'],
-        'Baseline': fam['baseline']
-    }
-    for scenario_name in scenarios:
-        # Find this specific family's result by ID, not by index!
-        scenario_results = all_results[scenario_name]
-        matching_result = next(r for r in scenario_results if r['id'] == fam['id'])
-        row[scenario_name] = matching_result['after']
-        row[f"{scenario_name}__std"] = matching_result['after_std']
+        title = f"🏠 Family Absence Game: Before → After Policy ({pretty})"
+        fig = px.scatter(
+            anim_df,
+            x="family", y="y",
+            animation_frame="frame",
+            text="emoji",
+            range_y=[-0.5, float(anim_df['y'].max()) + 1],
+            title=title,
+            hover_data=['family','emoji','y','frame','race']
+        )
+        fig.update_traces(textposition="middle center", marker=dict(size=1, opacity=0))
+        fig.update_layout(
+            xaxis=dict(showticklabels=False, title="Families (anonymized)"),
+            yaxis=dict(title="Absence Days"),
+            font=dict(size=18)
+        )
+        if getattr(fig.layout, "sliders", None):
+            s = fig.layout.sliders[0]
+            s.currentvalue.prefix = "Progress (0→1, unitless): "
+            s.currentvalue.font.size = 14
 
-    rows.append(row)
-    
-    df = pd.DataFrame(rows)
-    
-    # Create main visualization - simple line chart tracking each family
-    fig = go.Figure()
-    
-    # X-axis categories (scenarios)
-    x_categories = list(scenarios.keys())
-    
-    # Add a line for each family
-    for _, family_row in df.iterrows():
-        y_values = [family_row[scenario] for scenario in x_categories]
-        y_std_vals = [family_row[f"{scenario}__std"] for scenario in x_categories]
+        fn = f"docs/viz_{pretty.lower().replace(' ','_')}.html"
+        fig.write_html(fn, include_plotlyjs='cdn')
+        print(f"→ wrote {fn}")
+        out_files.append((pretty, fn))
 
-        
-        fig.add_trace(go.Scatter(
-            error_y=dict(type='data', array=y_std_vals, visible=True),
-            customdata=y_std_vals,
-
-            x=x_categories,
-            y=y_values,
-            mode='lines+markers',
-            name=family_row['Family'],
-            line=dict(width=1),
-            marker=dict(size=8),
-            opacity=0.7,
-            hovertemplate=(
-              f"<b>{family_row['Family']}</b><br>" +
-              f"Child race: {family_row['Child race']}<br>" +
-              f"Baseline: {family_row['Baseline']:.1f} days<br>" +
-              "Scenario: %{x}<br>" +
-              "Mean days absent: %{y:.2f}<br>" +
-              "Std across trials: %{customdata:.2f}<br>" +
-              "<extra></extra>"
-          )
-        ))
-    
-    fig.update_layout(
-        title="Digital Twin: Track Each Family Across All Interventions",
-        xaxis_title="Intervention",
-        yaxis_title="Days Absent from School",
-        height=800,
-        hovermode='closest',
-        showlegend=True,
-        legend=dict(
-            yanchor="top",
-            y=1,
-            xanchor="left", 
-            x=1.02
-        ),
-        margin=dict(r=150)
+    # (D) Time-series of average absences
+    time_df = pd.concat(all_anim, ignore_index=True)
+    ts = (
+        time_df
+        .groupby(['scenario','frame'])['y']
+        .mean()
+        .reset_index(name='avg_absences')
     )
-    
-    # Save main visualization
-    fig.write_html("docs/family_tracker.html", include_plotlyjs='cdn')
-    print("→ wrote docs/family_tracker.html")
-    
-    # Interactive simulator (unchanged)
-    write_interactive_simulator(families, BETAS, "docs/simulator.html")
-    print("→ wrote docs/simulator.html")
-    
-    # Simple index page
-    with open("docs/index.html", "w") as f:
-        f.write("""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset='utf-8'>
-    <title>Family Digital Twin</title>
-    <style>
-        body { font-family: -apple-system, sans-serif; margin: 3rem auto; max-width: 600px; }
-        h1 { color: #333; }
-        a { 
-            display: block; 
-            margin: 1rem 0; 
-            padding: 1rem; 
-            background: #4CAF50; 
-            color: white; 
-            text-decoration: none; 
-            border-radius: 8px; 
-            text-align: center;
-        }
-        a:hover { background: #45a049; }
-    </style>
-</head>
-<body>
-    <h1>📊 Family Absence Digital Twin</h1>
-    <p>Track how each family responds to different interventions</p>
-    <a href='family_tracker.html'>View Family Tracker</a>
-    <a href='simulator.html'>Interactive Simulator</a>
-</body>
-</html>""")
-    
-    print("\n✅ Done! Open docs/index.html to view")
+
+    # Static comparison (clear labels)
+    fig_static = px.line(
+        ts,
+        x="frame", y="avg_absences",
+        color="scenario",
+        title="🏠 Average Absences Over Progress (by Scenario)",
+        labels={"frame":"Progress (0→1, unitless)","avg_absences":"Avg Absence Days"}
+    )
+    fig_static.update_layout(
+        hovermode="x unified",
+        legend_title="Scenario",
+        font=dict(size=18),
+        xaxis_title="Progress (0→1, unitless)",
+        yaxis_title="Avg Absence Days"
+    )
+    stat_fn = "docs/viz_compare_time.html"
+    fig_static.write_html(stat_fn, include_plotlyjs='cdn')
+    print(f"→ wrote {stat_fn}")
+    out_files.append(("Over-Time Comparison", stat_fn))
+
+    # Animated line drawing (labels clarify unitless "Progress")
+    frames = sorted(ts['frame'].unique())
+    recs = []
+    for f in frames:
+        subset = ts[ts['frame'] <= f]
+        for _, row in subset.iterrows():
+            recs.append({
+                'scenario':    row['scenario'],
+                'frame_drawn': f,
+                'x':           row['frame'],
+                'y':           row['avg_absences']
+            })
+    ts_anim = pd.DataFrame(recs)
+
+    ymin = float(ts['avg_absences'].min())
+    ymax = float(ts['avg_absences'].max())
+
+    fig_anim = px.line(
+        ts_anim,
+        x="x", y="y",
+        color="scenario",
+        animation_frame="frame_drawn",
+        title="🏠 Animated Avg Absences Over Progress",
+        labels={"x":"Progress (0→1, unitless)","y":"Avg Absence Days","frame_drawn":"Progress (0→1)"},
+        range_x=[0,1],
+        range_y=[ymin, ymax]
+    )
+    fig_anim.update_layout(
+        hovermode="x unified",
+        legend_title="Scenario",
+        font=dict(size=18),
+        xaxis_title="Progress (0→1, unitless)",
+        yaxis_title="Avg Absence Days"
+    )
+    fig_anim.update_xaxes(range=[0,1])
+    fig_anim.update_yaxes(range=[ymin, ymax])
+    if getattr(fig_anim.layout, "sliders", None):
+        s2 = fig_anim.layout.sliders[0]
+        s2.currentvalue.prefix = "Progress (0→1, unitless): "
+        s2.currentvalue.font.size = 14
+
+    anim_fn = "docs/viz_compare_time_anim.html"
+    fig_anim.write_html(anim_fn, include_plotlyjs='cdn')
+    print(f"→ wrote {anim_fn}")
+    out_files.append(("Animated Over-Time Comparison", anim_fn))
+
+    # (E) Interactive simulator page
+    sim_fn = "docs/simulator.html"
+    write_interactive_simulator(families, BETAS, sim_fn)
+    print(f"→ wrote {sim_fn}")
+    out_files.append(("Interactive Simulator", sim_fn))
+
+    # (F) Minimal index
+    idx = [
+        "<!DOCTYPE html>",
+        "<html><head><meta charset='utf-8'><title>Family Absence Scenarios</title></head>",
+        "<body style='font-family:sans-serif; margin:2rem;'>",
+        "<h1>📊 Family Absence Scenarios</h1>",
+        "<ul>"
+    ]
+    for label, fn in out_files:
+        rel = os.path.basename(fn)
+        idx.append(f"  <li><a href='{rel}' target='_blank'>{label}</a></li>")
+    idx += [
+        "</ul>",
+        "<p style='color:#555;max-width:720px'>",
+        "Notes: (1) The X-axis labeled “Progress (0→1)” is a unitless animation slider (not days/months/years). ",
+        "(2) Per-scenario scatters use X = Families (anonymized), Y = Absence Days. ",
+        "(3) Try the Interactive Simulator to tweak demographics and policy settings.",
+        "</p>",
+        "</body></html>"
+    ]
+    with open("docs/index.html","w", encoding="utf-8") as f:
+        f.write("\n".join(idx))
+
+    print("✅ All files written into docs/ (ready for GitHub Pages).")

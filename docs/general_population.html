@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>General Population Exploratory Simulator</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:1.5rem;background:#f8f9fa;}
+    .container{max-width:1400px;margin:0 auto;}
+    h1{color:#2c3e50;margin-bottom:.5rem;}
+    .subtitle{color:#7f8c8d;margin-bottom:1.5rem;font-size:1.05rem;}
+    .warning{background:#fff3cd;border-left:4px solid #ffc107;padding:1.5rem;margin-bottom:2rem;border-radius:8px;}
+    .warning h3{margin-top:0;color:#856404;font-size:1.1rem;}
+    .warning p{margin:.5rem 0;color:#856404;line-height:1.6;}
+    .warning strong{color:#664d03;}
+    .assumptions{background:#e7f3ff;border-left:4px solid #0066cc;padding:1.5rem;margin-bottom:2rem;border-radius:8px;}
+    .assumptions h3{margin-top:0;color:#004085;}
+    .assumptions ul{margin:.5rem 0;padding-left:1.5rem;}
+    .assumptions li{margin:.5rem 0;color:#004085;line-height:1.6;}
+    .row{display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1.5rem;}
+    .card{background:white;border:1px solid #e1e8ed;border-radius:12px;padding:1.5rem;box-shadow:0 2px 4px rgba(0,0,0,0.05);}
+    .settings-card{flex:0 0 400px;}
+    .chart-card{flex:1;min-width:500px;}
+    .grid{display:grid;grid-template-columns:160px 1fr;gap:.75rem 1rem;align-items:center;margin-bottom:1rem;}
+    label{font-weight:600;color:#34495e;font-size:.9rem;}
+    input,select{padding:.6rem;border:2px solid #e1e8ed;border-radius:8px;font-size:.95rem;transition:border .2s;}
+    input:focus,select:focus{outline:none;border-color:#3498db;}
+    button{width:100%;padding:.8rem;border:none;border-radius:8px;background:#3498db;color:white;font-weight:600;font-size:1rem;cursor:pointer;transition:background .2s;}
+    button:hover{background:#2980b9;}
+    .metric{background:#ecf0f1;padding:1rem;border-radius:8px;margin-top:1rem;}
+    .metric-label{font-size:.85rem;color:#7f8c8d;margin-bottom:.25rem;}
+    .metric-value{font-size:1.6rem;font-weight:700;color:#2c3e50;}
+    .range-display{background:#e8f4f8;padding:1rem;border-radius:8px;margin-top:1rem;font-size:.9rem;}
+    .range-display h4{margin:0 0 .5rem;color:#2c3e50;}
+    .confidence-badge{display:inline-block;padding:.25rem .5rem;border-radius:4px;font-size:.75rem;font-weight:600;margin-left:.5rem;}
+    .high-confidence{background:#d4edda;color:#155724;}
+    .exploratory{background:#fff3cd;color:#856404;}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🌎 General Population Impact (Exploratory)</h1>
+    <p class="subtitle">Extrapolated estimates showing potential impact if CMC findings apply to all US children</p>
+
+    <div class="warning">
+      <h3>⚠️ IMPORTANT: These Are Extrapolated Estimates</h3>
+      <p><strong>What we know with HIGH CONFIDENCE (from CMC research):</strong><br>
+      When caregivers of medically complex children receive multicomponent interventions, their loneliness decreases by 0.80 points (<a href="https://jamanetwork.com/journals/jamanetworkopen/fullarticle/2797399" target="_blank" style="color:#856404;text-decoration:underline;">Hoang et al., JAMA Network Open, 2022</a>), which reduces their child's school absences by ~0.39 days (Family CIRCLE data analysis). This is calculated by taking the loneliness frequency, statistically-significant beta coefficient from Family Circle analysis (0.482) and multiplying it by the intervention effect (0.8) derived from the JAMA study.</p>
+      <p><strong>What we're ESTIMATING (general population):</strong><br>
+      General population parents also experience high loneliness (66% report isolation - <a href="https://wexnermedical.osu.edu/mediaroom/pressreleaselisting/new-survey-finds-loneliness-epidemic-runs-deep-among-parents" target="_blank" style="color:#856404;text-decoration:underline;">Ohio State University Wexner Medical Center, 2024</a>). The same interventions <em>might</em> reduce absences for all children, but the effect could be weaker because:</p>
+      <ul style="margin:.5rem 0 .5rem 1.5rem;padding:0;">
+        <li>Healthy children's absences may be less driven by caregiver stress</li>
+        <li>The loneliness → absence relationship may be CMC-specific</li>
+        <li>We have no direct data, only reasonable assumptions</li>
+      </ul>
+      
+      <p><strong>Bottom line:</strong> Use these estimates to understand <em>potential scale</em>, not as confirmed findings. Wide uncertainty ranges reflect our limited knowledge.</p>
+    </div>
+
+    <div class="assumptions">
+      <h3>📊 Calculation Methodology:</h3>
+      <ul>
+        <li><strong>Simulation approach:</strong> We simulate 10,000 children (sample) and extrapolate to full population. The per-child effect is identical, so this is statistically equivalent but much faster.</li>
+        <li><strong>Conservative Scenario:</strong> Assumes effect is 31% as strong in general population (β = 0.15) (multicomponent)</li>
+        <li><strong>Middle Scenario:</strong> Assumes effect is 63% as strong (β = 0.30) (multicomponent)</li>
+        <li><strong>Optimistic Scenario:</strong> Assumes effect is same as CMC (β = 0.48) (multicomponent)</li>
+        <li><strong>General population baseline:</strong> ~10 days absent per year (<a href="https://www.aei.org/research-products/report/everyone-is-missing-more-school-how-student-attendance-patterns-have-shifted-over-time/" target="_blank" style="color:#004085;text-decoration:underline;">Kirksey, AEI Report, 2025</a> - mean absence rates 5-8% of 180 school days)</li>
+        <li><strong>Simulation method:</strong> Same Poisson model used for CMC, applied to representative sample</li>
+      </ul>
+    </div>
+
+    <div class="row">
+      <div class="card settings-card">
+        <h2 style="margin-top:0;color:#2c3e50;">Settings</h2>
+        <div class="grid">
+          <label>Intervention</label>
+          <select id="scenario">
+            <option value="none">No Intervention</option>
+            <option value="multicomponent">Multicomponent Program</option>
+            <option value="counseling">Group Counseling</option>
+        </select>
+
+          <label>Assumption Strength</label>
+          <select id="assumption">
+            <option value="conservative">Conservative (31%)</option>
+            <option value="middle" selected>Middle (63%)</option>
+            <option value="optimistic">Optimistic (100%)</option>
+          </select>
+
+          <label>US Children</label>
+          <input id="us_pop" type="number" value="73000000" step="1000000">
+
+          <label>Trials</label>
+          <input id="trials" type="number" value="30" min="10" max="100" step="10">
+
+          <label>Seed</label>
+          <input id="seed" type="number" value="42" step="1">
+        </div>
+        <button id="btn_run">Run Simulation</button>
+
+        <div class="metric">
+          <div class="metric-label">Days Saved (Current Scenario)</div>
+          <div class="metric-value" id="days_saved">0</div>
+          <span class="confidence-badge exploratory">EXPLORATORY</span>
+        </div>
+
+        <div class="range-display">
+          <h4>All Three Scenarios:</h4>
+          <div id="range_display" style="font-size:.85rem;line-height:1.8;"></div>
+        </div>
+
+        <div class="metric" style="background:#d4edda;">
+          <div class="metric-label">For Comparison: CMC Only</div>
+          <div class="metric-value" style="color:#155724;" id="cmc_comparison">~438,000 days</div>
+          <span class="confidence-badge high-confidence">HIGH CONFIDENCE</span>
+        </div>
+      </div>
+
+      <div class="card chart-card">
+        <h2 style="margin-top:0;color:#2c3e50;">Impact Comparison</h2>
+        <div id="comparison_chart" style="height:400px;"></div>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="card" style="flex:1;">
+        <h2 style="margin-top:0;color:#2c3e50;">Absence Day Distribution (Sample)</h2>
+        <div id="dist_chart" style="height:350px;"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const CMC_FAMILIES = [{"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 0.0, "loneliness": 4.0, "worry": 2.0, "overwhelm": 5.0}, {"baseline": 3.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 2.0, "loneliness": 5.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 1.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 5.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 3.0, "loneliness": 4.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 1.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 3.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 1.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 3.0, "overwhelm": 2.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 3.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 3.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 0.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 1.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 3.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 2.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 3.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 1.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 3.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 5.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 3.0, "loneliness": 5.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 4.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 1.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 4.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 0.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 5.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 3.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 2.0}, {"baseline": 3.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 3.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 3.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 4.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 4.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 0.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 1.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 1.0, "loneliness": 5.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 1.0, "loneliness": 4.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 5.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 4.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 1.0}, {"baseline": 2.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 3.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 4.0, "loneliness": 5.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 2.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 3.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 3.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 3.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 1.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 1.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 3.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 0.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 5.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 2.0}, {"baseline": 3.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 0.0, "loneliness": 1.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 2.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 4.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 2.0, "loneliness": 4.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 0.0, "loneliness": 4.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 1.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 3.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 3.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 3.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 3.0, "loneliness": 4.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 3.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 2.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 4.0, "loneliness": 5.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 5.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 3.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 3.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 3.0, "loneliness": 1.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 2.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 2.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 3.0}, {"baseline": 4.0, "loneliness": 5.0, "worry": 4.0, "overwhelm": 3.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 4.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 3.0}, {"baseline": 3.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 3.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 4.0, "loneliness": 2.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 5.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 3.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 3.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 5.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 3.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 5.0, "overwhelm": 1.0}, {"baseline": 3.0, "loneliness": 5.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 0.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 1.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 0.0, "loneliness": 5.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 3.0, "loneliness": 4.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 4.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 3.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 0.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 1.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 5.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 0.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 4.0, "loneliness": 5.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 5.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 3.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 2.0, "loneliness": 5.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 0.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 4.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 5.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 5.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 2.0}, {"baseline": 4.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 4.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 3.0, "loneliness": 4.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 4.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 1.0, "loneliness": 5.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 5.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 2.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 3.0}, {"baseline": 3.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 3.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 5.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 3.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 5.0}, {"baseline": 3.0, "loneliness": 2.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 1.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 1.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 3.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 5.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 4.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 1.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 4.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 2.0}, {"baseline": 4.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 3.0}, {"baseline": 0.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 0.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 3.0}, {"baseline": 2.0, "loneliness": 3.0, "worry": 1.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 5.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 3.0, "loneliness": 4.0, "worry": 1.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 1.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 4.0, "loneliness": 5.0, "worry": 1.0, "overwhelm": 3.0}, {"baseline": 0.0, "loneliness": 1.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 2.0, "worry": 3.0, "overwhelm": 3.0}, {"baseline": 1.0, "loneliness": 4.0, "worry": 5.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 2.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 1.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 3.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 4.0, "worry": 4.0, "overwhelm": 3.0}, {"baseline": 3.0, "loneliness": 5.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 4.0, "loneliness": 3.0, "worry": 4.0, "overwhelm": 4.0}, {"baseline": 0.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 3.0}, {"baseline": 0.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 2.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 3.0, "overwhelm": 4.0}, {"baseline": 2.0, "loneliness": 1.0, "worry": 2.0, "overwhelm": 1.0}, {"baseline": 1.0, "loneliness": 5.0, "worry": 4.0, "overwhelm": 5.0}, {"baseline": 1.0, "loneliness": 3.0, "worry": 5.0, "overwhelm": 4.0}];
+  const CMC_BETAS = {"overwhelm": 0.1817621, "worry": 0.1026722, "loneliness": 0.4822393};
+
+  // General population baseline: ~10 days/year average (NCES 2024)
+  const GEN_POP_BASELINE = 10.0;
+
+  // Assumption scenarios: what % of CMC effect applies to general population
+   const ASSUMPTIONS = {
+    conservative: { beta_mult: 0.31, intervention_mult: 0.50 },
+    middle:       { beta_mult: 0.63, intervention_mult: 0.75 },
+    optimistic:   { beta_mult: 1.00, intervention_mult: 1.00 }
+  };
+
+    const INTERVENTIONS = {
+        none: { loneliness: 0.0, worry: 0.0, overwhelm: 0.0 },
+        multicomponent: { loneliness: 0.80, worry: 0.0, overwhelm: 0.0 },
+        counseling: { loneliness: 0.23, worry: 0.0, overwhelm: 0.0 }
+    };
+
+  function mulberry32(a){return function(){var t=a+=0x6D2B79F5;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296;}}
+  function poisson(lam,rng){if(lam<=0)return 0;const L=Math.exp(-lam);let k=0,p=1;do{k++;p*=rng();}while(p>L);return k-1;}
+
+  function simulate(){
+    const scenario = document.getElementById('scenario').value;
+    const assumption = document.getElementById('assumption').value;
+    const usPop = parseInt(document.getElementById('us_pop').value);
+    const trials = parseInt(document.getElementById('trials').value);
+    const seed = parseInt(document.getElementById('seed').value);
+
+    const assumptionParams = ASSUMPTIONS[assumption];
+    const intervention = INTERVENTIONS[scenario];
+
+    // Adjusted betas for general population
+    const adjustedBeta = CMC_BETAS.loneliness * assumptionParams.beta_mult;
+    const adjustedIntervention = intervention.loneliness * assumptionParams.intervention_mult;
+    
+    const saved = adjustedBeta * adjustedIntervention;
+
+    // OPTIMIZATION: Simulate a sample of 10,000 children instead of all 73M
+    // The per-child effect is identical, so we can extrapolate
+    const sampleSize = 10000;
+    let baselineAvgs = [], afterAvgs = [], baselineAll = [], afterAll = [];
+    
+    for(let t = 0; t < trials; t++){
+      const rng = mulberry32(seed + t);
+      let baselineSum = 0, afterSum = 0;
+      
+      for(let i = 0; i < sampleSize; i++){
+        const base = GEN_POP_BASELINE;
+        const lam = Math.max(0, base - saved);
+        const after = poisson(lam, rng);
+        
+        baselineSum += base;
+        afterSum += after;
+        if(t === 0){ baselineAll.push(base); afterAll.push(after); }
+      }
+      
+      baselineAvgs.push(baselineSum / sampleSize);
+      afterAvgs.push(afterSum / sampleSize);
+    }
+
+    const mean = a => a.reduce((x,y) => x+y, 0) / a.length;
+    const std = a => { const m = mean(a); return Math.sqrt(a.reduce((s,v) => s+(v-m)**2, 0) / a.length); };
+
+    const baselineMean = mean(baselineAvgs);
+    const afterMean = mean(afterAvgs);
+    const totalSaved = scenario === 'none' ? 0 : Math.round((baselineMean - afterMean) * usPop);
+    
+    document.getElementById('days_saved').textContent = totalSaved >= 0 ? totalSaved.toLocaleString() : '0';
+
+    // Calculate CMC comparison (using CMC data: 1.46M children, CMC baseline ~1.81 days)
+    const cmcPopulation = 1460000;
+    const cmcBaselineAvg = 1.81;
+    const cmcBeta = CMC_BETAS.loneliness;
+    const cmcInterventionEffect = intervention.loneliness; // Use actual intervention, not adjusted
+    const cmcDaysSaved = scenario === 'none' ? 0 : Math.round((cmcBeta * cmcInterventionEffect) * cmcPopulation);
+    
+    document.getElementById('cmc_comparison').textContent = '~' + cmcDaysSaved.toLocaleString() + ' days';
+
+    // Calculate all three scenarios for comparison
+    const allScenarios = {};
+    for(const [assumpName, assumpParams] of Object.entries(ASSUMPTIONS)){
+      const beta = CMC_BETAS.loneliness * assumpParams.beta_mult;
+      const interv = intervention.loneliness * assumpParams.intervention_mult;
+      const s = beta * interv;
+      const perChild = s;
+      const total = scenario === 'none' ? 0 : Math.round(perChild * usPop);
+      allScenarios[assumpName] = { perChild, total };
+    }
+
+    document.getElementById('range_display').innerHTML = `
+      <strong>Conservative:</strong> ${allScenarios.conservative.total.toLocaleString()} days (${allScenarios.conservative.perChild.toFixed(3)} per child)<br>
+      <strong>Middle:</strong> ${allScenarios.middle.total.toLocaleString()} days (${allScenarios.middle.perChild.toFixed(3)} per child)<br>
+      <strong>Optimistic:</strong> ${allScenarios.optimistic.total.toLocaleString()} days (${allScenarios.optimistic.perChild.toFixed(3)} per child)
+    `;
+
+    Plotly.react('comparison_chart', [{
+      x: ['Baseline', 'After Intervention\n(' + scenario.toUpperCase() + ', ' + assumption + ')'],
+      y: [baselineMean, afterMean],
+      error_y: { type: 'data', array: [std(baselineAvgs), std(afterAvgs)], visible: true },
+      type: 'bar',
+      marker: { color: ['#e74c3c', '#27ae60'] },
+      text: [baselineMean.toFixed(2) + ' days', afterMean.toFixed(2) + ' days'],
+      textposition: 'auto',
+      textfont: { size: 14, color: 'white' }
+    }], {
+      yaxis: { title: 'Average Days Absent per Child' },
+      showlegend: false,
+      margin: { t: 40, b: 80 }
+    }, { displayModeBar: false });
+
+    Plotly.react('dist_chart', [
+      { x: baselineAll, type: 'histogram', opacity: .6, name: 'Baseline', marker: { color: '#e74c3c' } },
+      { x: afterAll, type: 'histogram', opacity: .6, name: 'After ' + scenario.toUpperCase(), marker: { color: '#27ae60' } }
+    ], {
+      barmode: 'overlay',
+      xaxis: { title: 'Days Absent' },
+      yaxis: { title: 'Number of Children (10k sample)' },
+      legend: { orientation: 'h', y: 1.1 },
+      margin: { t: 40 }
+    }, { displayModeBar: false });
+  }
+
+  document.getElementById('btn_run').addEventListener('click', simulate);
+  simulate();
+</script>
+</body>
+</html>
