@@ -435,9 +435,9 @@ def write_general_population_simulator(families: list[dict], betas: dict, out_pa
       <h3>📊 Calculation Methodology:</h3>
       <ul>
         <li><strong>Simulation approach:</strong> We simulate 10,000 children (sample) and extrapolate to full population. The per-child effect is identical, so this is statistically equivalent but much faster.</li>
-        <li><strong>Conservative Scenario:</strong> Assumes effect is 31% as strong in general population (β = 0.15) </li>
-        <li><strong>Middle Scenario:</strong> Assumes effect is 63% as strong (β = 0.30) </li>
-        <li><strong>Optimistic Scenario:</strong> Assumes effect is same as CMC (β = 0.48) </li>
+        <li><strong>Conservative Scenario:</strong> Assumes effect is 10% as strong in general population (β ≈ 0.048) </li>
+        <li><strong>Middle Scenario:</strong> Assumes effect is 20% as strong (β ≈ 0.096) </li>
+        <li><strong>Optimistic Scenario:</strong> Assumes effect is half as strong as CMC (β ≈ 0.24) </li>
         <li><strong>General population baseline:</strong> ~10 days absent per year (<a href="https://www.aei.org/research-products/report/everyone-is-missing-more-school-how-student-attendance-patterns-have-shifted-over-time/" target="_blank" style="color:#004085;text-decoration:underline;">Kirksey, AEI Report, 2025</a> - mean absence rates 5-8% of 180 school days)</li>
       </ul>
     </div>
@@ -455,9 +455,9 @@ def write_general_population_simulator(families: list[dict], betas: dict, out_pa
 
           <label>Assumption Strength</label>
           <select id="assumption">
-            <option value="conservative">Conservative (31%)</option>
-            <option value="middle" selected>Middle (63%)</option>
-            <option value="optimistic">Optimistic (100%)</option>
+            <option value="conservative">Conservative (10%)</option>
+            <option value="middle" selected>Middle (20%)</option>
+            <option value="optimistic">Optimistic (50%)</option>
           </select>
 
           <label>US Children</label>
@@ -512,9 +512,9 @@ def write_general_population_simulator(families: list[dict], betas: dict, out_pa
 
   // Assumption scenarios: what % of CMC effect applies to general population
    const ASSUMPTIONS = {
-    conservative: { beta_mult: 0.31, intervention_mult: 0.50 },
-    middle:       { beta_mult: 0.63, intervention_mult: 0.75 },
-    optimistic:   { beta_mult: 1.00, intervention_mult: 1.00 }
+    conservative: { beta_mult: 0.10, intervention_mult: 0.10 },
+    middle:       { beta_mult: 0.20, intervention_mult: 0.20 },
+    optimistic:   { beta_mult: 0.5, intervention_mult: 0.5 }
   };
 
     const INTERVENTIONS = {
