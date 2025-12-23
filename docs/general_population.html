@@ -196,35 +196,44 @@
 
     const baselineMean = mean(baselineAvgs);
     const afterMean = mean(afterAvgs);
-    const totalSaved = scenario === 'none' ? 0 : Math.round((baselineMean - afterMean) * usPop);
+    // Separate CMC from general population to avoid double-counting
+    const nonCmcPop = usPop - 1460000;  // Subtract CMC children
+    const totalSaved = scenario === 'none' ? 0 : Math.round((baselineMean - afterMean) * nonCmcPop);
     
-    document.getElementById('days_saved').textContent = totalSaved >= 0 ? totalSaved.toLocaleString() : '0';
-
-    // Calculate CMC comparison (using CMC data: 1.46M children, CMC baseline ~1.81 days)
+    // Show combined total: CMC (full effect) + non-CMC (scaled effect)
     const cmcPopulation = 1460000;
-    const cmcBaselineAvg = 1.81;
     const cmcBeta = CMC_BETAS.loneliness;
-    const cmcInterventionEffect = intervention.loneliness; // Use actual intervention, not adjusted
+    const cmcInterventionEffect = intervention.loneliness;
     const cmcDaysSaved = scenario === 'none' ? 0 : Math.round((cmcBeta * cmcInterventionEffect) * cmcPopulation);
-    
+    const combinedTotal = totalSaved + cmcDaysSaved;
+
+    document.getElementById('days_saved').textContent = combinedTotal >= 0 ? combinedTotal.toLocaleString() : '0';
+
+    // CMC breakdown is already calculated above, just display it
     document.getElementById('cmc_comparison').textContent = '~' + cmcDaysSaved.toLocaleString() + ' days';
 
-    // Calculate all three scenarios for comparison
     const allScenarios = {};
+    const nonCmcPop = usPop - 1460000;
+    const cmcPop = 1460000;
+    const cmcEffect = (CMC_BETAS.loneliness * (intervention.loneliness || 0));
+
     for(const [assumpName, assumpParams] of Object.entries(ASSUMPTIONS)){
       const beta = CMC_BETAS.loneliness * assumpParams.beta_mult;
       const interv = intervention.loneliness * assumpParams.intervention_mult;
       const s = beta * interv;
       const perChild = s;
-      const total = scenario === 'none' ? 0 : Math.round(perChild * usPop);
+      const nonCmcTotal = scenario === 'none' ? 0 : Math.round(perChild * nonCmcPop);
+      const cmcTotal = scenario === 'none' ? 0 : Math.round(cmcEffect * cmcPop);
+      const total = nonCmcTotal + cmcTotal;
       allScenarios[assumpName] = { perChild, total };
     }
 
     document.getElementById('range_display').innerHTML = `
-      <strong>Conservative:</strong> ${allScenarios.conservative.total.toLocaleString()} days (${allScenarios.conservative.perChild.toFixed(3)} per child)<br>
-      <strong>Middle:</strong> ${allScenarios.middle.total.toLocaleString()} days (${allScenarios.middle.perChild.toFixed(3)} per child)<br>
-      <strong>Optimistic:</strong> ${allScenarios.optimistic.total.toLocaleString()} days (${allScenarios.optimistic.perChild.toFixed(3)} per child)
-    `;
+    <strong>Conservative:</strong> ${allScenarios.conservative.total.toLocaleString()} days<br>
+    <strong>Middle:</strong> ${allScenarios.middle.total.toLocaleString()} days<br>
+    <strong>Optimistic:</strong> ${allScenarios.optimistic.total.toLocaleString()} days<br>
+    <em style="font-size:.85em;color:#666;">(Includes CMC at full effect + non-CMC at scaled effect)</em>
+  `;
 
     Plotly.react('comparison_chart', [{
       x: ['Baseline', 'After Intervention\n(' + scenario.toUpperCase() + ', ' + assumption + ')'],
