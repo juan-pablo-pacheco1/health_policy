@@ -44,7 +44,7 @@
 
     <div class="warning">
       <h3>⚠️ IMPORTANT: These Are Extrapolated Estimates</h3>
-      <p><strong>What we know with HIGH CONFIDENCE (from CMC research):</strong><br>
+      <p><strong>What we know with HIGHER CONFIDENCE (from CMC research):</strong><br>
       When caregivers of medically complex children receive multicomponent interventions, their loneliness decreases by 0.80 points (<a href="https://jamanetwork.com/journals/jamanetworkopen/fullarticle/2797399" target="_blank" style="color:#856404;text-decoration:underline;">Hoang et al., JAMA Network Open, 2022</a>), which reduces their child's school absences by ~0.39 days (Family CIRCLE data analysis). This is calculated by taking the loneliness frequency, statistically-significant beta coefficient from Family Circle analysis (0.482) and multiplying it by the intervention effect (0.8) derived from the JAMA study.</p>
       <p><strong>What we're ESTIMATING (general population):</strong><br>
       General population parents also experience high loneliness (66% report isolation - <a href="https://wexnermedical.osu.edu/mediaroom/pressreleaselisting/new-survey-finds-loneliness-epidemic-runs-deep-among-parents" target="_blank" style="color:#856404;text-decoration:underline;">Ohio State University Wexner Medical Center, 2024</a>). The same interventions <em>might</em> reduce absences for all children, but the effect could be weaker because:</p>
@@ -89,6 +89,12 @@
           <label>US Children</label>
           <input id="us_pop" type="number" value="73000000" step="1000000">
 
+          <label>CMC Percentage</label>
+          <div style="display:flex;align-items:center;gap:.5rem;">
+            <input id="cmc_pct" type="number" value="0.5" min="0.01" max="1.0" step="0.01" style="width:60%;">
+            <span style="font-size:.85rem;color:#7f8c8d;">%</span>
+          </div>
+
           <label>Trials</label>
           <input id="trials" type="number" value="30" min="10" max="100" step="10">
 
@@ -111,7 +117,7 @@
         <div class="metric" style="background:#d4edda;">
           <div class="metric-label">For Comparison: CMC Only</div>
           <div class="metric-value" style="color:#155724;" id="cmc_comparison">~438,000 days</div>
-          <span class="confidence-badge high-confidence">HIGH CONFIDENCE</span>
+          <span class="confidence-badge high-confidence">HIGHER CONFIDENCE</span>
         </div>
       </div>
 
@@ -153,11 +159,19 @@
   function poisson(lam,rng){if(lam<=0)return 0;const L=Math.exp(-lam);let k=0,p=1;do{k++;p*=rng();}while(p>L);return k-1;}
 
   function simulate(){
-    const scenario = document.getElementById('scenario').value;
-    const assumption = document.getElementById('assumption').value;
-    const usPop = parseInt(document.getElementById('us_pop').value);
-    const trials = parseInt(document.getElementById('trials').value);
-    const seed = parseInt(document.getElementById('seed').value);
+      const scenario = document.getElementById('scenario').value;
+      const assumption = document.getElementById('assumption').value;
+      const usPop = parseInt(document.getElementById('us_pop').value);
+      let cmcPct = parseFloat(document.getElementById('cmc_pct').value);
+      
+      // Validate and clamp CMC percentage to 0.01-1.0 range (AAP: <1% of children)
+      if (isNaN(cmcPct) || cmcPct < 0.01) cmcPct = 0.01;
+      if (cmcPct > 1.0) cmcPct = 1.0;
+      document.getElementById('cmc_pct').value = cmcPct;  // Update display
+      cmcPct = cmcPct / 100;  // Convert % to decimal
+      
+      const trials = parseInt(document.getElementById('trials').value);
+      const seed = parseInt(document.getElementById('seed').value);
 
     const assumptionParams = ASSUMPTIONS[assumption];
     const intervention = INTERVENTIONS[scenario];
@@ -196,25 +210,28 @@
 
     const baselineMean = mean(baselineAvgs);
     const afterMean = mean(afterAvgs);
-    // Separate CMC from general population to avoid double-counting
-    const nonCmcPop = usPop - 1460000;  // Subtract CMC children
-    const totalSaved = scenario === 'none' ? 0 : Math.round((baselineMean - afterMean) * nonCmcPop);
+    // Calculate CMC population dynamically
+    const cmcPopulation = Math.round(usPop * cmcPct);
+    const nonCmcPop = usPop - cmcPopulation;  // Subtract CMC children
+    const nonCmcSaved = scenario === 'none' ? 0 : Math.round((baselineMean - afterMean) * nonCmcPop);
     
-    // Show combined total: CMC (full effect) + non-CMC (scaled effect)
-    const cmcPopulation = 1460000;
+    // Calculate CMC days saved (full strength effect)
     const cmcBeta = CMC_BETAS.loneliness;
     const cmcInterventionEffect = intervention.loneliness;
     const cmcDaysSaved = scenario === 'none' ? 0 : Math.round((cmcBeta * cmcInterventionEffect) * cmcPopulation);
-    const combinedTotal = totalSaved + cmcDaysSaved;
+
+    // Combined total: non-CMC (scaled) + CMC (full)
+    const combinedTotal = nonCmcSaved + cmcDaysSaved;
 
     document.getElementById('days_saved').textContent = combinedTotal >= 0 ? combinedTotal.toLocaleString() : '0';
 
-    // CMC breakdown is already calculated above, just display it
-    document.getElementById('cmc_comparison').textContent = '~' + cmcDaysSaved.toLocaleString() + ' days';
+    // CMC breakdown display
+    document.getElementById('cmc_comparison').textContent = 
+        '~' + cmcDaysSaved.toLocaleString() + ' days (' + 
+        cmcPopulation.toLocaleString() + ' CMC children)';
 
+    // Calculate all scenarios for comparison
     const allScenarios = {};
-    const nonCmcPop = usPop - 1460000;
-    const cmcPop = 1460000;
     const cmcEffect = (CMC_BETAS.loneliness * (intervention.loneliness || 0));
 
     for(const [assumpName, assumpParams] of Object.entries(ASSUMPTIONS)){
@@ -223,17 +240,19 @@
       const s = beta * interv;
       const perChild = s;
       const nonCmcTotal = scenario === 'none' ? 0 : Math.round(perChild * nonCmcPop);
-      const cmcTotal = scenario === 'none' ? 0 : Math.round(cmcEffect * cmcPop);
+      const cmcTotal = scenario === 'none' ? 0 : Math.round(cmcEffect * cmcPopulation);
       const total = nonCmcTotal + cmcTotal;
-      allScenarios[assumpName] = { perChild, total };
-    }
+      allScenarios[assumpName] = { perChild, total, cmcTotal, nonCmcTotal };
+}
 
     document.getElementById('range_display').innerHTML = `
-    <strong>Conservative:</strong> ${allScenarios.conservative.total.toLocaleString()} days<br>
-    <strong>Middle:</strong> ${allScenarios.middle.total.toLocaleString()} days<br>
-    <strong>Optimistic:</strong> ${allScenarios.optimistic.total.toLocaleString()} days<br>
-    <em style="font-size:.85em;color:#666;">(Includes CMC at full effect + non-CMC at scaled effect)</em>
-  `;
+  <strong>Conservative:</strong> ${allScenarios.conservative.total.toLocaleString()} days<br>
+  <span style="font-size:.85em;color:#666;margin-left:1rem;">CMC: ${allScenarios.conservative.cmcTotal.toLocaleString()} | Non-CMC: ${allScenarios.conservative.nonCmcTotal.toLocaleString()}</span><br>
+  <strong>Middle:</strong> ${allScenarios.middle.total.toLocaleString()} days<br>
+  <span style="font-size:.85em;color:#666;margin-left:1rem;">CMC: ${allScenarios.middle.cmcTotal.toLocaleString()} | Non-CMC: ${allScenarios.middle.nonCmcTotal.toLocaleString()}</span><br>
+  <strong>Optimistic:</strong> ${allScenarios.optimistic.total.toLocaleString()} days<br>
+  <span style="font-size:.85em;color:#666;margin-left:1rem;">CMC: ${allScenarios.optimistic.cmcTotal.toLocaleString()} | Non-CMC: ${allScenarios.optimistic.nonCmcTotal.toLocaleString()}</span>
+`;
 
     Plotly.react('comparison_chart', [{
       x: ['Baseline', 'After Intervention\n(' + scenario.toUpperCase() + ', ' + assumption + ')'],
